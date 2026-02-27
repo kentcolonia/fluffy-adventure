@@ -2,7 +2,7 @@
 const API_URL = "http://10.10.0.3:5000/api";
 
 import React, { useState, useEffect } from 'react';
-import { Upload, Plus, Trash2, Printer, FileSpreadsheet, Loader2 } from 'lucide-react';
+import { Upload, Plus, Trash2, Printer, FileSpreadsheet, Loader2, Pencil, Check, X } from 'lucide-react';
 
 interface Employee {
   fullname: string;
@@ -23,12 +23,18 @@ export default function App() {
   const [employeeDatabase, setEmployeeDatabase] = useState<Employee[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Add form state
   const [selectedName, setSelectedName] = useState('');
   const [position, setPosition] = useState('');
   const [indication, setIndication] = useState('');
   const [signaturePreview, setSignaturePreview] = useState<string | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [showDropdown, setShowDropdown] = useState(false);
+
+  // Edit state
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editData, setEditData] = useState<Partial<EmployeeRecord>>({});
+  const [editShowDropdown, setEditShowDropdown] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -130,6 +136,30 @@ export default function App() {
     const updated = records.filter(r => r.id !== id);
     setRecords(updated);
     saveRecords(updated);
+  };
+
+  const handleEdit = (record: EmployeeRecord) => {
+    setEditingId(record.id);
+    setEditData({ ...record });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setEditData({});
+  };
+
+  const handleSaveEdit = () => {
+    const updated = records.map(r => r.id === editingId ? { ...r, ...editData } as EmployeeRecord : r);
+    setRecords(updated);
+    saveRecords(updated);
+    setEditingId(null);
+    setEditData({});
+  };
+
+  const handleEditImage = (field: 'signature' | 'photo', file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => setEditData(prev => ({ ...prev, [field]: reader.result as string }));
+    reader.readAsDataURL(file);
   };
 
   if (isLoading) return (
@@ -244,51 +274,151 @@ export default function App() {
                   <th className="border border-gray-400 px-3 py-2 text-center font-bold">Signature</th>
                   <th className="border border-gray-400 px-3 py-2 text-center font-bold">Indication</th>
                   <th className="border border-gray-400 px-3 py-2 text-center font-bold">Photo</th>
-                  <th className="border border-gray-400 px-3 py-2 text-center font-bold print:hidden w-10"></th>
+                  <th className="border border-gray-400 px-3 py-2 text-center font-bold print:hidden w-24">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {records.map((record, index) => (
-                  <tr key={record.id} className="group">
-                    {/* Row Number */}
-                    <td className="border border-gray-400 px-3 py-2 text-center text-gray-500 font-medium align-middle">
-                      {index + 1}
-                    </td>
-                    {/* Name */}
-                    <td className="border border-gray-400 px-3 py-2 align-middle font-semibold text-gray-800" style={{ height: '80px' }}>
-                      {record.name}
-                    </td>
-                    {/* Designation */}
-                    <td className="border border-gray-400 px-3 py-2 align-middle text-gray-700">
-                      {record.position}
-                    </td>
-                    {/* Signature */}
-                    <td className="border border-gray-400 px-2 py-1 align-middle" style={{ width: '140px', height: '80px' }}>
-                      {record.signature
-                        ? <img src={record.signature} alt="signature"
-                            style={{ width: '100%', height: '76px', objectFit: 'contain', display: 'block' }} />
-                        : <span className="text-gray-300 text-xs block text-center">—</span>}
-                    </td>
-                    {/* Indication */}
-                    <td className="border border-gray-400 px-3 py-2 text-center align-middle text-gray-700">
-                      {record.indication}
-                    </td>
-                    {/* Photo - fitted inside the box */}
-                    <td className="border border-gray-400 px-1 py-1 align-middle" style={{ width: '80px', height: '80px' }}>
-                      {record.photo
-                        ? <img src={record.photo} alt="photo"
-                            style={{ width: '100%', height: '78px', objectFit: 'cover', display: 'block' }} />
-                        : <span className="text-gray-300 text-xs block text-center">—</span>}
-                    </td>
-                    {/* Delete Button */}
-                    <td className="border border-gray-400 px-2 py-2 text-center align-middle print:hidden">
-                      <button onClick={() => handleDelete(record.id)}
-                        className="text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-all">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {records.map((record, index) => {
+                  const isEditing = editingId === record.id;
+                  return (
+                    <tr key={record.id} className={`group ${isEditing ? 'bg-yellow-50' : ''}`}>
+
+                      {/* Row Number */}
+                      <td className="border border-gray-400 px-3 py-2 text-center text-gray-500 font-medium align-middle">
+                        {index + 1}
+                      </td>
+
+                      {/* Name */}
+                      <td className="border border-gray-400 px-3 py-2 align-middle" style={{ height: '80px' }}>
+                        {isEditing ? (
+                          <div className="relative">
+                            <input
+                              type="text"
+                              value={editData.name || ''}
+                              onChange={(e) => { setEditData(prev => ({ ...prev, name: e.target.value })); setEditShowDropdown(true); }}
+                              onFocus={() => setEditShowDropdown(true)}
+                              onBlur={() => setTimeout(() => setEditShowDropdown(false), 200)}
+                              className="w-full p-1.5 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none"
+                            />
+                            {editShowDropdown && (
+                              <ul className="absolute z-50 w-64 mt-1 bg-white border rounded-lg shadow-2xl max-h-40 overflow-auto">
+                                {employeeDatabase
+                                  .filter(e => e.fullname.toLowerCase().includes((editData.name || '').toLowerCase()))
+                                  .map((emp, i) => (
+                                    <li key={i}
+                                      onMouseDown={() => { setEditData(prev => ({ ...prev, name: emp.fullname, position: emp.position })); setEditShowDropdown(false); }}
+                                      className="p-2 hover:bg-blue-50 cursor-pointer border-b last:border-0 text-xs">
+                                      <div className="font-bold">{emp.fullname}</div>
+                                      <div className="text-gray-400">{emp.position}</div>
+                                    </li>
+                                  ))}
+                              </ul>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="font-semibold text-gray-800">{record.name}</span>
+                        )}
+                      </td>
+
+                      {/* Designation */}
+                      <td className="border border-gray-400 px-3 py-2 align-middle">
+                        {isEditing ? (
+                          <input
+                            type="text"
+                            value={editData.position || ''}
+                            onChange={(e) => setEditData(prev => ({ ...prev, position: e.target.value }))}
+                            className="w-full p-1.5 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none bg-gray-50"
+                          />
+                        ) : (
+                          <span className="text-gray-700">{record.position}</span>
+                        )}
+                      </td>
+
+                      {/* Signature */}
+                      <td className="border border-gray-400 px-2 py-1 align-middle" style={{ width: '140px', height: '80px' }}>
+                        {isEditing ? (
+                          <div className="relative h-16 flex items-center justify-center border border-dashed border-gray-300 rounded cursor-pointer hover:bg-gray-50">
+                            {editData.signature
+                              ? <img src={editData.signature} alt="sig" style={{ width: '100%', height: '60px', objectFit: 'contain' }} />
+                              : <span className="text-xs text-gray-400">Click to replace</span>}
+                            <input type="file" accept="image/*"
+                              onChange={(e) => { const f = e.target.files?.[0]; if (f) handleEditImage('signature', f); }}
+                              className="absolute inset-0 opacity-0 cursor-pointer" />
+                          </div>
+                        ) : (
+                          record.signature
+                            ? <img src={record.signature} alt="signature" style={{ width: '100%', height: '76px', objectFit: 'contain', display: 'block' }} />
+                            : <span className="text-gray-300 text-xs block text-center">—</span>
+                        )}
+                      </td>
+
+                      {/* Indication */}
+                      <td className="border border-gray-400 px-3 py-2 text-center align-middle">
+                        {isEditing ? (
+                          <select
+                            value={editData.indication || ''}
+                            onChange={(e) => setEditData(prev => ({ ...prev, indication: e.target.value }))}
+                            className="w-full p-1.5 border rounded text-sm focus:ring-2 focus:ring-blue-400 outline-none">
+                            <option value="Stay-In">Stay-In</option>
+                            <option value="Stay-Out">Stay-Out</option>
+                          </select>
+                        ) : (
+                          <span className="text-gray-700">{record.indication}</span>
+                        )}
+                      </td>
+
+                      {/* Photo */}
+                      <td className="border border-gray-400 px-1 py-1 align-middle" style={{ width: '80px', height: '80px' }}>
+                        {isEditing ? (
+                          <div className="relative h-16 flex items-center justify-center border border-dashed border-gray-300 rounded cursor-pointer hover:bg-gray-50">
+                            {editData.photo
+                              ? <img src={editData.photo} alt="photo" style={{ width: '100%', height: '60px', objectFit: 'cover' }} />
+                              : <span className="text-xs text-gray-400">Click to replace</span>}
+                            <input type="file" accept="image/*"
+                              onChange={(e) => { const f = e.target.files?.[0]; if (f) handleEditImage('photo', f); }}
+                              className="absolute inset-0 opacity-0 cursor-pointer" />
+                          </div>
+                        ) : (
+                          record.photo
+                            ? <img src={record.photo} alt="photo" style={{ width: '100%', height: '78px', objectFit: 'cover', display: 'block' }} />
+                            : <span className="text-gray-300 text-xs block text-center">—</span>
+                        )}
+                      </td>
+
+                      {/* Actions */}
+                      <td className="border border-gray-400 px-2 py-2 text-center align-middle print:hidden">
+                        {isEditing ? (
+                          <div className="flex items-center justify-center gap-2">
+                            <button onClick={handleSaveEdit}
+                              className="bg-green-500 text-white p-1.5 rounded-full hover:bg-green-600 transition"
+                              title="Save changes">
+                              <Check className="w-3.5 h-3.5" />
+                            </button>
+                            <button onClick={handleCancelEdit}
+                              className="bg-gray-400 text-white p-1.5 rounded-full hover:bg-gray-500 transition"
+                              title="Cancel">
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                            <button onClick={() => handleEdit(record)}
+                              className="bg-blue-500 text-white p-1.5 rounded-full hover:bg-blue-600 transition"
+                              title="Edit row">
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button onClick={() => handleDelete(record.id)}
+                              className="bg-red-500 text-white p-1.5 rounded-full hover:bg-red-600 transition"
+                              title="Delete row">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
+                      </td>
+
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
