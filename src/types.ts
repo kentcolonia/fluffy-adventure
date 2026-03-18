@@ -14,6 +14,7 @@ export interface EmployeeRecord {
   name: string;
   position: string;
   empCode?: string;
+  company?: string;
   indication: string;
   signature: string | null;
   photo: string | null;
@@ -68,3 +69,11 @@ export interface IDTemplate {
 }
 
 export type ActiveSection = 'home' | 'dashboard' | 'add' | 'database' | 'idbuilder' | 'idrecords';
+
+export interface EditingID {
+  id: string;
+  employeeName: string;
+  position: string;
+  front: IDSide;
+  back: IDSide;
+}

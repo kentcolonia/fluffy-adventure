@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Plus, FileSpreadsheet, CreditCard, Download, Menu, Shield, Printer } from 'lucide-react';
+import { Users, Plus, FileSpreadsheet, CreditCard, Download, Menu, Shield, Printer, X, Home } from 'lucide-react';
 import { API_URL } from './types';
-import type { EmployeeRecord, Employee, ActiveSection } from './types';
+import type { EmployeeRecord, Employee, ActiveSection, EditingID } from './types';
 import HomePage from './components/HomePage';
 import PersonnelRecords from './components/PersonnelRecords';
-import AddPersonnel from './components/AddPersonnel';
+import AddPersonnelModal from './components/AddPersonnel';
 import LoadDatabase from './components/LoadDatabase';
 import SavedIDs from './components/SavedIDs';
 import IDBuilder from './components/IDBuilder';
@@ -13,9 +13,19 @@ export default function App() {
   const [records, setRecords] = useState<EmployeeRecord[]>([]);
   const [employeeDatabase, setEmployeeDatabase] = useState<Employee[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeSection, setActiveSection] = useState<ActiveSection>('home');
   const [savedIDs, setSavedIDs] = useState<any[]>([]);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [editingID, setEditingID] = useState<EditingID | null>(null);
+
+  // Detect mobile
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, []);
 
   useEffect(() => {
     fetch(`${API_URL}/saved-ids`).then(r => r.ok ? r.json() : []).then(setSavedIDs).catch(() => {});
@@ -33,8 +43,7 @@ export default function App() {
     if (!(window as any).XLSX) {
       const s = document.createElement('script');
       s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
-      s.async = true;
-      document.body.appendChild(s);
+      s.async = true; document.body.appendChild(s);
     }
     loadData();
   }, []);
@@ -42,33 +51,40 @@ export default function App() {
   const stayIn = records.filter(r => r.indication === 'Stay-In').length;
   const stayOut = records.filter(r => r.indication === 'Stay-Out').length;
 
-  const navItems: { id: ActiveSection; label: string; icon: React.ReactNode; color: string; badge?: number | null }[] = [
-    { id: 'home',       label: 'Home',              icon: <Shield size={16}/>,          color: '#667eea' },
-    { id: 'dashboard',  label: 'Personnel Records', icon: <Users size={16}/>,           color: '#667eea', badge: records.length },
-    { id: 'add',        label: 'Add Personnel',     icon: <Plus size={16}/>,            color: '#10b981' },
-    { id: 'database',   label: 'Load Database',     icon: <FileSpreadsheet size={16}/>, color: '#f59e0b', badge: employeeDatabase.length || null },
-    { id: 'idbuilder',  label: 'ID Builder',        icon: <CreditCard size={16}/>,      color: '#ec4899' },
-    { id: 'idrecords',  label: 'Saved IDs',         icon: <Download size={16}/>,        color: '#8b5cf6', badge: savedIDs.length || null },
+  const navItems: { id: ActiveSection; label: string; icon: React.ReactNode; color: string; badge?: number | null; isModal?: boolean }[] = [
+    { id: 'home',      label: 'Home',        icon: <Home size={18}/>,            color: '#667eea' },
+    { id: 'dashboard', label: 'Records',     icon: <Users size={18}/>,           color: '#667eea', badge: records.length },
+    { id: 'add',       label: 'Add',         icon: <Plus size={18}/>,            color: '#10b981', isModal: true },
+    { id: 'idbuilder', label: 'ID Builder',  icon: <CreditCard size={18}/>,      color: '#ec4899' },
+    { id: 'idrecords', label: 'Saved IDs',   icon: <Download size={18}/>,        color: '#8b5cf6', badge: savedIDs.length || null },
+  ];
+
+  const allNavItems: { id: ActiveSection; label: string; icon: React.ReactNode; color: string; badge?: number | null; isModal?: boolean }[] = [
+    { id: 'home',      label: 'Home',           icon: <Home size={16}/>,            color: '#667eea' },
+    { id: 'dashboard', label: 'Personnel Records', icon: <Users size={16}/>,        color: '#667eea', badge: records.length },
+    { id: 'add',       label: 'Add Personnel',  icon: <Plus size={16}/>,            color: '#10b981', isModal: true },
+    { id: 'database',  label: 'Load Database',  icon: <FileSpreadsheet size={16}/>, color: '#f59e0b', badge: employeeDatabase.length || null },
+    { id: 'idbuilder', label: 'ID Builder',     icon: <CreditCard size={16}/>,      color: '#ec4899' },
+    { id: 'idrecords', label: 'Saved IDs',      icon: <Download size={16}/>,        color: '#8b5cf6', badge: savedIDs.length || null },
   ];
 
   const sectionTitle: Record<ActiveSection, string> = {
-    home: 'Home',
-    dashboard: 'Personnel Records',
-    add: 'Add Personnel',
-    database: 'Load Database',
-    idbuilder: 'ID Builder',
-    idrecords: 'Saved IDs',
+    home: 'Home', dashboard: 'Personnel Records', add: 'Add Personnel',
+    database: 'Load Database', idbuilder: 'ID Builder', idrecords: 'Saved IDs',
+  };
+
+  const handleNav = (item: typeof allNavItems[0]) => {
+    if (item.isModal) { setShowAddModal(true); setSidebarOpen(false); }
+    else { setActiveSection(item.id); setSidebarOpen(false); }
   };
 
   if (isLoading) return (
     <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg,#667eea 0%,#764ba2 50%,#ec4899 100%)', flexDirection: 'column', gap: '16px' }}>
       <div style={{ background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(20px)', borderRadius: '24px', padding: '32px 48px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', border: '1px solid rgba(255,255,255,0.2)' }}>
-        <div style={{ background: 'white', borderRadius: '16px', padding: '12px', display: 'flex', boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>
-          <Shield size={28} color="#667eea" />
-        </div>
+        <div style={{ background: 'white', borderRadius: '16px', padding: '12px', display: 'flex', boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}><Shield size={28} color="#667eea" /></div>
         <div style={{ textAlign: 'center' }}>
-          <p style={{ margin: 0, color: '#fff', fontSize: '20px', fontWeight: 800, letterSpacing: '3px' }}>PORTER ACCESS</p>
-          <p style={{ margin: '4px 0 0', color: 'rgba(255,255,255,0.7)', fontSize: '12px', letterSpacing: '1px' }}>Control System</p>
+          <p style={{ margin: 0, color: '#fff', fontSize: '20px', fontWeight: 800, letterSpacing: '3px' }}>AVPASS</p>
+          <p style={{ margin: '4px 0 0', color: 'rgba(255,255,255,0.7)', fontSize: '12px', letterSpacing: '1px' }}>ID Management System</p>
         </div>
         <div style={{ width: '180px', height: '3px', background: 'rgba(255,255,255,0.2)', borderRadius: '2px', overflow: 'hidden' }}>
           <div style={{ height: '100%', background: 'white', animation: 'loading 1.4s ease-in-out infinite', borderRadius: '2px' }}></div>
@@ -81,123 +97,196 @@ export default function App() {
   return (
     <div style={{ display: 'flex', minHeight: '100vh', height: '100vh', background: '#f8fafc', fontFamily: "'Inter','Segoe UI',system-ui,sans-serif", color: '#0f172a', overflow: 'hidden' }}>
 
-      {/* ── SIDEBAR ── */}
-      <aside style={{ width: sidebarOpen ? '240px' : '64px', background: '#fff', transition: 'width 0.25s cubic-bezier(0.4,0,0.2,1)', flexShrink: 0, display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', borderRight: '1px solid #e2e8f0', boxShadow: '4px 0 24px rgba(0,0,0,0.04)' }} className="print:hidden">
-
-        {/* Logo */}
-        <div style={{ padding: sidebarOpen ? '20px 18px' : '20px 14px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: '12px', minHeight: '64px' }}>
-          <div style={{ background: 'linear-gradient(135deg,#667eea,#764ba2)', borderRadius: '12px', padding: '8px', display: 'flex', flexShrink: 0, boxShadow: '0 4px 12px rgba(102,126,234,0.4)' }}>
-            <Shield size={16} color="white" />
+      {/* ── DESKTOP SIDEBAR ── */}
+      {!isMobile && (
+        <aside style={{ width: sidebarOpen ? '240px' : '64px', background: '#fff', transition: 'width 0.25s cubic-bezier(0.4,0,0.2,1)', flexShrink: 0, display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', borderRight: '1px solid #e2e8f0', boxShadow: '4px 0 24px rgba(0,0,0,0.04)' }} className="print:hidden">
+          <div style={{ padding: sidebarOpen ? '20px 18px' : '20px 14px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: '12px', minHeight: '64px' }}>
+            <div style={{ background: 'linear-gradient(135deg,#667eea,#764ba2)', borderRadius: '12px', padding: '8px', display: 'flex', flexShrink: 0, boxShadow: '0 4px 12px rgba(102,126,234,0.4)' }}>
+              <Shield size={16} color="white" />
+            </div>
+            {sidebarOpen && (
+              <div>
+                <p style={{ margin: 0, color: '#0f172a', fontSize: '14px', fontWeight: 800, letterSpacing: '0.5px' }}>AVPass</p>
+                <p style={{ margin: '1px 0 0', color: '#94a3b8', fontSize: '10px', letterSpacing: '1px' }}>ID Management System</p>
+              </div>
+            )}
           </div>
+          <nav style={{ padding: '12px 8px', flex: 1, overflowY: 'auto' }}>
+            {sidebarOpen && <p style={{ color: '#94a3b8', fontSize: '10px', fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', padding: '0 10px', margin: '0 0 8px' }}>Navigation</p>}
+            {allNavItems.map(item => (
+              <button key={item.id} onClick={() => handleNav(item)} title={!sidebarOpen ? item.label : undefined}
+                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '10px', padding: '10px', borderRadius: '12px', border: 'none', cursor: 'pointer', background: (!item.isModal && activeSection === item.id) ? `${item.color}15` : 'transparent', color: (!item.isModal && activeSection === item.id) ? item.color : '#64748b', marginBottom: '2px', transition: 'all 0.15s', textAlign: 'left', justifyContent: sidebarOpen ? 'flex-start' : 'center' }}
+                onMouseEnter={e => { if (activeSection !== item.id) (e.currentTarget as HTMLElement).style.background = '#f8fafc'; }}
+                onMouseLeave={e => { if (activeSection !== item.id) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
+                <span style={{ flexShrink: 0, color: (!item.isModal && activeSection === item.id) ? item.color : '#94a3b8' }}>{item.icon}</span>
+                {sidebarOpen && (
+                  <>
+                    <span style={{ fontSize: '13px', fontWeight: (!item.isModal && activeSection === item.id) ? 600 : 400, flex: 1, whiteSpace: 'nowrap' }}>{item.label}</span>
+                    {item.badge != null && item.badge > 0 && (
+                      <span style={{ background: (!item.isModal && activeSection === item.id) ? item.color : '#e2e8f0', color: (!item.isModal && activeSection === item.id) ? '#fff' : '#64748b', fontSize: '10px', fontWeight: 700, padding: '2px 7px', borderRadius: '20px' }}>{item.badge}</span>
+                    )}
+                  </>
+                )}
+              </button>
+            ))}
+          </nav>
           {sidebarOpen && (
-            <div>
-              <p style={{ margin: 0, color: '#0f172a', fontSize: '14px', fontWeight: 800, letterSpacing: '0.5px' }}>Porter Access</p>
-              <p style={{ margin: '1px 0 0', color: '#94a3b8', fontSize: '10px', letterSpacing: '1px' }}>Control System</p>
+            <div style={{ padding: '12px', borderTop: '1px solid #f1f5f9' }}>
+              <p style={{ margin: '0 0 8px', color: '#94a3b8', fontSize: '10px', fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase' }}>Quick Stats</p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                {[{ label: 'Stay-In', value: stayIn, color: '#10b981', bg: '#ecfdf5' }, { label: 'Stay-Out', value: stayOut, color: '#ef4444', bg: '#fef2f2' }].map(s => (
+                  <div key={s.label} style={{ background: s.bg, borderRadius: '10px', padding: '10px 12px' }}>
+                    <p style={{ margin: 0, color: s.color, fontSize: '20px', fontWeight: 800 }}>{s.value}</p>
+                    <p style={{ margin: '2px 0 0', color: s.color, fontSize: '10px', opacity: 0.7 }}>{s.label}</p>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
-        </div>
+          <button onClick={() => setSidebarOpen(!sidebarOpen)}
+            style={{ margin: '8px', padding: '10px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', cursor: 'pointer', color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Menu size={15} />
+          </button>
+        </aside>
+      )}
 
-        {/* Nav */}
-        <nav style={{ padding: '12px 8px', flex: 1, overflowY: 'auto' }}>
-          {sidebarOpen && <p style={{ color: '#94a3b8', fontSize: '10px', fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', padding: '0 10px', margin: '0 0 8px' }}>Navigation</p>}
-          {navItems.map(item => (
-            <button key={item.id} onClick={() => setActiveSection(item.id)}
-              title={!sidebarOpen ? item.label : undefined}
-              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 10px', borderRadius: '12px', border: 'none', cursor: 'pointer', background: activeSection === item.id ? `${item.color}15` : 'transparent', color: activeSection === item.id ? item.color : '#64748b', marginBottom: '2px', transition: 'all 0.15s', textAlign: 'left', justifyContent: sidebarOpen ? 'flex-start' : 'center', boxShadow: activeSection === item.id ? `0 2px 8px ${item.color}20` : 'none' }}
-              onMouseEnter={e => { if (activeSection !== item.id) (e.currentTarget as HTMLElement).style.background = '#f8fafc'; }}
-              onMouseLeave={e => { if (activeSection !== item.id) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
-              <span style={{ flexShrink: 0, color: activeSection === item.id ? item.color : '#94a3b8' }}>{item.icon}</span>
-              {sidebarOpen && (
-                <>
-                  <span style={{ fontSize: '13px', fontWeight: activeSection === item.id ? 600 : 400, flex: 1, whiteSpace: 'nowrap' }}>{item.label}</span>
-                  {item.badge !== null && item.badge !== undefined && item.badge > 0 && (
-                    <span style={{ background: activeSection === item.id ? item.color : '#e2e8f0', color: activeSection === item.id ? '#fff' : '#64748b', fontSize: '10px', fontWeight: 700, padding: '2px 7px', borderRadius: '20px', minWidth: '20px', textAlign: 'center' }}>{item.badge}</span>
-                  )}
-                </>
-              )}
-            </button>
-          ))}
-        </nav>
-
-        {/* Stats */}
-        {sidebarOpen && (
-          <div style={{ padding: '12px', borderTop: '1px solid #f1f5f9' }}>
-            <p style={{ margin: '0 0 8px', color: '#94a3b8', fontSize: '10px', fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase' }}>Quick Stats</p>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-              {[{ label: 'Stay-In', value: stayIn, color: '#10b981', bg: '#ecfdf5' }, { label: 'Stay-Out', value: stayOut, color: '#ef4444', bg: '#fef2f2' }].map(s => (
-                <div key={s.label} style={{ background: s.bg, borderRadius: '10px', padding: '10px 12px', border: `1px solid ${s.color}20` }}>
-                  <p style={{ margin: 0, color: s.color, fontSize: '20px', fontWeight: 800 }}>{s.value}</p>
-                  <p style={{ margin: '2px 0 0', color: s.color, fontSize: '10px', opacity: 0.7 }}>{s.label}</p>
+      {/* ── MOBILE DRAWER OVERLAY ── */}
+      {isMobile && sidebarOpen && (
+        <>
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 40, backdropFilter: 'blur(4px)' }} onClick={() => setSidebarOpen(false)} />
+          <aside style={{ position: 'fixed', left: 0, top: 0, bottom: 0, width: '280px', background: '#fff', zIndex: 50, display: 'flex', flexDirection: 'column', boxShadow: '8px 0 32px rgba(0,0,0,0.15)', animation: 'slideIn 0.25s ease' }}>
+            <div style={{ padding: '20px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{ background: 'linear-gradient(135deg,#667eea,#764ba2)', borderRadius: '12px', padding: '8px', display: 'flex', boxShadow: '0 4px 12px rgba(102,126,234,0.4)' }}><Shield size={16} color="white" /></div>
+                <div>
+                  <p style={{ margin: 0, color: '#0f172a', fontSize: '15px', fontWeight: 800 }}>AVPass</p>
+                  <p style={{ margin: 0, color: '#94a3b8', fontSize: '10px' }}>ID Management System</p>
                 </div>
-              ))}
+              </div>
+              <button onClick={() => setSidebarOpen(false)} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '8px', cursor: 'pointer', display: 'flex', color: '#64748b' }}><X size={16} /></button>
             </div>
-          </div>
-        )}
-
-        {/* Collapse */}
-        <button onClick={() => setSidebarOpen(!sidebarOpen)}
-          style={{ margin: '8px', padding: '10px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', cursor: 'pointer', color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s' }}
-          onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#f1f5f9'}
-          onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = '#f8fafc'}>
-          <Menu size={15} />
-        </button>
-      </aside>
+            <nav style={{ padding: '12px 8px', flex: 1, overflowY: 'auto' }}>
+              <p style={{ color: '#94a3b8', fontSize: '10px', fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', padding: '0 10px', margin: '0 0 8px' }}>Navigation</p>
+              {allNavItems.map(item => (
+                <button key={item.id} onClick={() => handleNav(item)}
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 14px', borderRadius: '12px', border: 'none', cursor: 'pointer', background: (!item.isModal && activeSection === item.id) ? `${item.color}15` : 'transparent', color: (!item.isModal && activeSection === item.id) ? item.color : '#64748b', marginBottom: '4px', textAlign: 'left' }}>
+                  <span style={{ color: (!item.isModal && activeSection === item.id) ? item.color : '#94a3b8' }}>{item.icon}</span>
+                  <span style={{ fontSize: '14px', fontWeight: (!item.isModal && activeSection === item.id) ? 600 : 400, flex: 1 }}>{item.label}</span>
+                  {item.badge != null && item.badge > 0 && (
+                    <span style={{ background: (!item.isModal && activeSection === item.id) ? item.color : '#e2e8f0', color: (!item.isModal && activeSection === item.id) ? '#fff' : '#64748b', fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '20px' }}>{item.badge}</span>
+                  )}
+                </button>
+              ))}
+            </nav>
+            <div style={{ padding: '16px', borderTop: '1px solid #f1f5f9' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                {[{ label: 'Stay-In', value: stayIn, color: '#10b981', bg: '#ecfdf5' }, { label: 'Stay-Out', value: stayOut, color: '#ef4444', bg: '#fef2f2' }].map(s => (
+                  <div key={s.label} style={{ background: s.bg, borderRadius: '10px', padding: '12px' }}>
+                    <p style={{ margin: 0, color: s.color, fontSize: '22px', fontWeight: 800 }}>{s.value}</p>
+                    <p style={{ margin: '2px 0 0', color: s.color, fontSize: '11px', opacity: 0.7 }}>{s.label}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </aside>
+        </>
+      )}
 
       {/* ── MAIN ── */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
 
         {/* Header */}
-        <header style={{ background: 'rgba(255,255,255,0.9)', backdropFilter: 'blur(12px)', borderBottom: '1px solid #e2e8f0', padding: '0 24px', height: '56px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }} className="print:hidden">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ color: '#94a3b8', fontSize: '13px' }}>Porter Access</span>
-            <span style={{ color: '#cbd5e1' }}>/</span>
-            <span style={{ color: '#0f172a', fontSize: '13px', fontWeight: 600 }}>{sectionTitle[activeSection]}</span>
+        <header style={{ background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(12px)', borderBottom: '1px solid #e2e8f0', padding: '0 16px', height: '56px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, zIndex: 30 }} className="print:hidden">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <button onClick={() => setSidebarOpen(!sidebarOpen)}
+              style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', color: '#64748b' }}>
+              <Menu size={16} />
+            </button>
+            {isMobile ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{ background: 'linear-gradient(135deg,#667eea,#764ba2)', borderRadius: '8px', padding: '5px', display: 'flex' }}><Shield size={13} color="white" /></div>
+                <span style={{ fontSize: '14px', fontWeight: 800, color: '#0f172a' }}>AVPass</span>
+                <span style={{ color: '#cbd5e1' }}>·</span>
+                <span style={{ fontSize: '13px', color: '#64748b' }}>{sectionTitle[activeSection]}</span>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ color: '#94a3b8', fontSize: '13px' }}>AVPass</span>
+                <span style={{ color: '#cbd5e1' }}>/</span>
+                <span style={{ color: '#0f172a', fontSize: '13px', fontWeight: 600 }}>{sectionTitle[activeSection]}</span>
+              </div>
+            )}
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
               <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#10b981' }}></div>
-              <span style={{ color: '#64748b', fontSize: '11px' }}>Server Online</span>
+              {!isMobile && <span style={{ color: '#64748b', fontSize: '11px' }}>Online</span>}
             </div>
-            <span style={{ color: '#e2e8f0' }}>|</span>
             {activeSection === 'dashboard' && records.length > 0 && (
-              <button onClick={() => window.print()} style={{ background: 'linear-gradient(135deg,#667eea,#764ba2)', color: '#fff', border: 'none', borderRadius: '10px', padding: '7px 16px', cursor: 'pointer', fontSize: '12px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px', boxShadow: '0 2px 8px rgba(102,126,234,0.4)' }}>
-                <Printer size={13} /> Print
+              <button onClick={() => window.print()} style={{ background: 'linear-gradient(135deg,#667eea,#764ba2)', color: '#fff', border: 'none', borderRadius: '10px', padding: '7px 12px', cursor: 'pointer', fontSize: '12px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '5px', boxShadow: '0 2px 8px rgba(102,126,234,0.4)' }}>
+                <Printer size={13} />{!isMobile && ' Print'}
               </button>
             )}
           </div>
         </header>
 
         {/* Content */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: activeSection === 'idbuilder' ? '0' : '24px' }}>
-          {activeSection === 'home' && (
-            <HomePage records={records} savedIDs={savedIDs} employeeDatabase={employeeDatabase} onNavigate={setActiveSection} />
-          )}
-          {activeSection === 'dashboard' && (
-            <PersonnelRecords records={records} setRecords={setRecords} employeeDatabase={employeeDatabase} onNavigate={setActiveSection} />
-          )}
-          {activeSection === 'add' && (
-            <AddPersonnel records={records} setRecords={setRecords} employeeDatabase={employeeDatabase} onSuccess={() => setActiveSection('dashboard')} />
-          )}
-          {activeSection === 'database' && (
-            <LoadDatabase employeeDatabase={employeeDatabase} setEmployeeDatabase={setEmployeeDatabase} />
-          )}
-          {activeSection === 'idbuilder' && (
-            <IDBuilder records={records} />
-          )}
-          {activeSection === 'idrecords' && (
-            <SavedIDs savedIDs={savedIDs} setSavedIDs={setSavedIDs} />
-          )}
+        <div style={{ flex: 1, overflowY: 'auto', padding: activeSection === 'idbuilder' ? '0' : isMobile ? '16px 12px 80px' : '24px' }}>
+          {activeSection === 'home' && <HomePage records={records} savedIDs={savedIDs} employeeDatabase={employeeDatabase} onNavigate={setActiveSection} onAddPersonnel={() => setShowAddModal(true)} />}
+          {activeSection === 'dashboard' && <PersonnelRecords records={records} setRecords={setRecords} employeeDatabase={employeeDatabase} onAddPersonnel={() => setShowAddModal(true)} />}
+          {activeSection === 'database' && <LoadDatabase employeeDatabase={employeeDatabase} setEmployeeDatabase={setEmployeeDatabase} />}
+          {activeSection === 'idbuilder' && <IDBuilder records={records} editingID={editingID} onEditSaved={_id => { setEditingID(null); }} />}
+          {activeSection === 'idrecords' && <SavedIDs savedIDs={savedIDs} setSavedIDs={setSavedIDs} onEditInBuilder={entry => { setEditingID({ id: entry.id, employeeName: entry.employeeName, position: entry.position, front: entry.front, back: entry.back }); setActiveSection('idbuilder'); }} />}
         </div>
+
+        {/* ── MOBILE BOTTOM NAV ── */}
+        {isMobile && (
+          <nav style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'rgba(255,255,255,0.97)', backdropFilter: 'blur(16px)', borderTop: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', zIndex: 30, boxShadow: '0 -4px 24px rgba(0,0,0,0.08)' }} className="print:hidden">
+            {navItems.map(item => (
+              <button key={item.id} onClick={() => handleNav(item)}
+                style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '10px 4px', border: 'none', background: 'transparent', cursor: 'pointer', color: (!item.isModal && activeSection === item.id) ? item.color : '#94a3b8', transition: 'all 0.15s', position: 'relative', minHeight: '60px' }}>
+                {/* Active indicator */}
+                {!item.isModal && activeSection === item.id && (
+                  <div style={{ position: 'absolute', top: 0, left: '20%', right: '20%', height: '3px', background: item.color, borderRadius: '0 0 4px 4px' }} />
+                )}
+                {/* Add button special style */}
+                {item.isModal ? (
+                  <div style={{ background: 'linear-gradient(135deg,#667eea,#764ba2)', borderRadius: '14px', padding: '10px', display: 'flex', boxShadow: '0 4px 14px rgba(102,126,234,0.45)', marginBottom: '2px' }}>
+                    <Plus size={18} color="white" />
+                  </div>
+                ) : (
+                  <div style={{ position: 'relative' }}>
+                    {item.icon}
+                    {item.badge != null && item.badge > 0 && (
+                      <span style={{ position: 'absolute', top: '-6px', right: '-8px', background: item.color, color: '#fff', fontSize: '9px', fontWeight: 700, padding: '1px 4px', borderRadius: '20px', minWidth: '14px', textAlign: 'center' }}>{item.badge > 99 ? '99+' : item.badge}</span>
+                    )}
+                  </div>
+                )}
+                <span style={{ fontSize: '10px', fontWeight: (!item.isModal && activeSection === item.id) ? 700 : 400, marginTop: item.isModal ? '0' : '4px' }}>{item.label}</span>
+              </button>
+            ))}
+          </nav>
+        )}
       </div>
+
+      {/* Add Personnel Modal */}
+      {showAddModal && (
+        <AddPersonnelModal records={records} setRecords={setRecords} employeeDatabase={employeeDatabase} onClose={() => setShowAddModal(false)} />
+      )}
 
       <style>{`
         * { box-sizing: border-box; }
-        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: #cbd5e1; }
         tr:hover .row-actions { opacity: 1 !important; }
         @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes slideIn { from { transform: translateX(-100%); } to { transform: translateX(0); } }
+        @keyframes modalIn { from { opacity:0; transform:scale(0.95) translateY(8px); } to { opacity:1; transform:scale(1) translateY(0); } }
+        @media (max-width: 768px) {
+          table { font-size: 12px !important; }
+          th, td { padding: 8px 10px !important; }
+        }
         @media print {
           body * { visibility: hidden !important; }
           #print-area, #print-area * { visibility: visible !important; }
@@ -208,7 +297,6 @@ export default function App() {
           tr { page-break-inside: avoid !important; break-inside: avoid !important; }
           img { display: block !important; max-width: 100% !important; }
           .print\\:hidden { display: none !important; }
-          span[style*="border-radius"] { border: 1px solid #000 !important; color: #000 !important; background: #fff !important; padding: 2px 6px !important; }
         }
       `}</style>
     </div>

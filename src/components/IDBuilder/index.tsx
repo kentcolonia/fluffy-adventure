@@ -277,13 +277,25 @@ const FieldEditor = React.memo(({ field, onUpdate }: FieldEditorProps) => {
 
 
 // ── MAIN ID BUILDER COMPONENT ──
-interface IDBuilderProps { records: EmployeeRecord[]; }
-export default function IDBuilder({ records }: IDBuilderProps) {
+interface IDBuilderProps {
+  records: EmployeeRecord[];
+  editingID?: { id: string; employeeName: string; position: string; front: IDSide; back: IDSide } | null;
+  onEditSaved?: (id: string) => void;
+}
+export default function IDBuilder({ records, editingID, onEditSaved }: IDBuilderProps) {
   const CARD_W = 214, CARD_H = 340; // CR80 portrait: 54mm x 85.6mm
 
   // ── core state ──
   const [activeSide, setActiveSide] = React.useState<'front'|'back'>('front');
-  const [zoom, setZoom]             = React.useState(1.0);
+  const getMobileZoom = () => {
+    if (typeof window === 'undefined') return 1.0;
+    if (window.innerWidth < 768) {
+      // Fit card with some padding on mobile
+      return Math.min((window.innerWidth - 48) / 214, 1.2);
+    }
+    return 1.0;
+  };
+  const [zoom, setZoom] = React.useState(getMobileZoom);
   const [showGrid, setShowGrid]     = React.useState(false);
   const [snap, setSnap]             = React.useState(true);
 
@@ -312,16 +324,22 @@ export default function IDBuilder({ records }: IDBuilderProps) {
   const [showEmpDrop,      setShowEmpDrop]       = React.useState(false);
 
   // ── card data ──
-  const [front, setFront] = React.useState<IDSide>({
-    background:null, fields: defaultFrontFields,
-    photoX:50, photoY:30, photoW:55, photoH:38, showPhoto:true,
-    sigX:50,   sigY:74,  sigW:40,  sigH:8,   showSig:true,
-  });
-  const [back, setBack] = React.useState<IDSide>({
-    background:null, fields: defaultBackFields,
-    photoX:50, photoY:30, photoW:55, photoH:38, showPhoto:false,
-    sigX:50,   sigY:74,  sigW:40,  sigH:8,   showSig:false,
-  });
+  const [front, setFront] = React.useState<IDSide>(
+    editingID?.front ?? {
+      background:null, fields: defaultFrontFields,
+      photoX:50, photoY:30, photoW:55, photoH:38, showPhoto:true,
+      sigX:50,   sigY:74,  sigW:40,  sigH:8,   showSig:true,
+    }
+  );
+  const [back, setBack] = React.useState<IDSide>(
+    editingID?.back ?? {
+      background:null, fields: defaultBackFields,
+      photoX:50, photoY:30, photoW:55, photoH:38, showPhoto:false,
+      sigX:50,   sigY:74,  sigW:40,  sigH:8,   showSig:false,
+    }
+  );
+  // Pre-fill employee name from editingID
+  const [_editingIDRef] = React.useState(editingID);
 
   // ── history ──
   const [history,    setHistory]    = React.useState<{front:IDSide;back:IDSide}[]>([]);
@@ -353,6 +371,28 @@ export default function IDBuilder({ records }: IDBuilderProps) {
   const [msg,       setMsg]       = React.useState<{type:'success'|'error';text:string}|null>(null);
   const [savingID,  setSavingID]  = React.useState(false);
   const [showFlip,  setShowFlip]  = React.useState(false);
+
+  // ── Mobile responsive ──
+  const [isMobile, setIsMobile] = React.useState(window.innerWidth < 768);
+  const [mobileTab, setMobileTab] = React.useState<'layers'|'canvas'|'props'>('canvas');
+  React.useEffect(() => {
+    const h = () => {
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+      if (mobile) setZoom(Math.min((window.innerWidth - 48) / 214, 1.2));
+      else setZoom(1.0);
+    };
+    window.addEventListener('resize', h);
+    return () => window.removeEventListener('resize', h);
+  }, []);
+
+  // ── Load saved ID data when editing ──
+  React.useEffect(() => {
+    if (_editingIDRef) {
+      setEmpSearch(_editingIDRef.employeeName);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [flipFace,  setFlipFace]  = React.useState<'front'|'back'>('front');
   const [flipAnim,  setFlipAnim]  = React.useState(false);
   const [frontUrl,  setFrontUrl]  = React.useState<string|null>(null);
@@ -408,7 +448,17 @@ export default function IDBuilder({ records }: IDBuilderProps) {
     if(empSearchRef.current) empSearchRef.current.value = emp.name;
     setFront(p=>({...p, fields:p.fields.map(f=>{
       if(f.id==='fullname') return {...f, value:emp.name};
-      if(f.id==='nickname') return {...f, value:emp.name.split(' ')[0]||emp.name};
+      if(f.id==='nickname') {
+        // Name format: "LASTNAME,FIRSTNAME MIDDLENAME" or "LASTNAME, FIRSTNAME"
+        const commaIdx = emp.name.indexOf(',');
+        let firstName = emp.name;
+        if (commaIdx !== -1) {
+          // Get everything after the comma, trim, take first word
+          const afterComma = emp.name.slice(commaIdx + 1).trim();
+          firstName = afterComma.split(' ')[0] || afterComma;
+        }
+        return {...f, value: firstName};
+      }
       if(f.id==='position') return {...f, value:emp.position};
       if(f.id==='idnum' && emp.empCode) return {...f, value:emp.empCode};
       return f;
@@ -424,6 +474,7 @@ export default function IDBuilder({ records }: IDBuilderProps) {
   const employeeSig   = selectedEmployee?.signature ? resolveImg(selectedEmployee.signature) : null;
 
   const handleFieldMouseDown = (e:React.MouseEvent, fieldId:string) => {
+    if (isMobile) setMobileTab('props');
     e.stopPropagation(); e.preventDefault();
     setSelectedFieldId(fieldId); setSelectedLayer(null);
     const rect = activeRef.current!.getBoundingClientRect();
@@ -434,6 +485,7 @@ export default function IDBuilder({ records }: IDBuilderProps) {
   };
 
   const handleLayerMouseDown = (e:React.MouseEvent, layer:'photo'|'sig') => {
+    if (isMobile) setMobileTab('props');
     e.stopPropagation(); e.preventDefault();
     setSelectedLayer(layer); setSelectedFieldId(null);
     const rect = activeRef.current!.getBoundingClientRect();
@@ -675,14 +727,27 @@ export default function IDBuilder({ records }: IDBuilderProps) {
   const downloadSide = async(w:'front'|'back')=>{ const url=await renderSide(w); const a=document.createElement('a'); a.download=`id-${w}.jpg`; a.href=url; a.click(); };
 
   const saveIDToServer = async()=>{
-    if(!selectedEmployee){ showMsg('error','Select an employee first.'); return; }
+    if(!selectedEmployee&&!editingID) return;
     setSavingID(true);
+    const [fi,bi]=await Promise.all([renderSide('front'),renderSide('back')]);
+    const name = selectedEmployee?.name || editingID?.employeeName || '';
+    const pos  = selectedEmployee?.position || editingID?.position || '';
     try{
-      const [fi,bi]=await Promise.all([renderSide('front'),renderSide('back')]);
-      const res=await fetch(`${API_URL}/saved-ids`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:`${selectedEmployee.id}-${Date.now()}`,employeeName:selectedEmployee.name,position:selectedEmployee.position,company:'',frontImg:fi,backImg:bi,savedAt:new Date().toLocaleDateString('en-US',{year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})})});
-      showMsg(res.ok?'success':'error', res.ok?`ID saved for ${selectedEmployee.name}!`:'Failed to save.');
-    }catch{ showMsg('error','Server error.'); }
+      if(editingID){
+        // Update existing saved ID
+        const res=await fetch(`${API_URL}/saved-ids/${editingID.id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({employeeName:name,position:pos,frontImg:fi,backImg:bi,savedAt:new Date().toLocaleDateString('en-US',{year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})})});
+        if(res.ok){ setMsg({type:'success',text:`ID updated for ${name}`}); if(onEditSaved) onEditSaved(editingID.id); }
+        else setMsg({type:'error',text:'Failed to update ID'});
+      } else {
+        // Save new ID
+        const res=await fetch(`${API_URL}/saved-ids`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:`${selectedEmployee!.id}-${Date.now()}`,employeeName:name,position:pos,company:'',frontImg:fi,backImg:bi,savedAt:new Date().toLocaleDateString('en-US',{year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})})});
+        if(res.ok) setMsg({type:'success',text:`ID saved for ${name}`});
+        else setMsg({type:'error',text:'Failed to save ID'});
+      }
+    }catch{ setMsg({type:'error',text:'Connection error'}); }
     setSavingID(false);
+    setTimeout(()=>setMsg(null),3000);
   };
 
   const saveTemplate = async()=>{
@@ -820,18 +885,21 @@ export default function IDBuilder({ records }: IDBuilderProps) {
     <div style={{display:'flex',flexDirection:'column',flex:1,overflow:'hidden',background:'#f8fafc', height: '100%'}}>
       
       {/* ════════════════════════════════════ TOP GLOBAL TOOLBAR ══ */}
-      <header style={{height:'64px',background:'#fff',borderBottom:'1px solid #e2e8f0',display:'flex',alignItems:'center',justifyContent:'space-between',padding:'0 24px',flexShrink:0,zIndex:20}}>
+      <header style={{minHeight:'56px',background:'#fff',borderBottom:'1px solid #e2e8f0',display:'flex',alignItems:'center',justifyContent:'space-between',padding:isMobile?'0 12px':'0 24px',flexShrink:0,zIndex:20,flexWrap:isMobile?'wrap':'nowrap',gap:'8px'}}>
         {/* Brand & History */}
         <div style={{display:'flex',alignItems:'center',gap:'24px'}}>
           <div style={{display:'flex',alignItems:'center',gap:'12px'}}>
             <div style={{background:'linear-gradient(135deg,#ec4899,#be185d)',padding:'8px',borderRadius:'10px',boxShadow:'0 4px 10px rgba(236,72,153,0.3)'}}><LayoutTemplate size={18} color="#fff"/></div>
             <div>
-              <div style={{fontSize:'15px',fontWeight:800,color:'#0f172a',lineHeight:1.1}}>ID Studio</div>
-              <div style={{fontSize:'11px',color:'#94a3b8',fontWeight:500}}>Design & Export</div>
+              <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
+                <div style={{fontSize:'15px',fontWeight:800,color:'#0f172a',lineHeight:1.1}}>ID Studio</div>
+                {editingID&&<span style={{background:'#f59e0b22',color:'#d97706',fontSize:'9px',fontWeight:800,padding:'2px 8px',borderRadius:'20px',border:'1px solid #f59e0b44',letterSpacing:'0.5px'}}>✏ EDITING</span>}
+              </div>
+              <div style={{fontSize:'11px',color:'#94a3b8',fontWeight:500}}>{editingID?`Editing: ${editingID.employeeName}`:'Design & Export'}</div>
             </div>
           </div>
-          <div style={{width:'1px',height:'28px',background:'#e2e8f0'}}></div>
-          <div style={{display:'flex',gap:'6px'}}>
+          {!isMobile && <div style={{width:'1px',height:'28px',background:'#e2e8f0'}}></div>}
+          <div style={{display:isMobile?'none':'flex',gap:'6px'}}>
             <button onClick={undo} disabled={historyIdx<=0} style={{padding:'8px',borderRadius:'8px',border:'1px solid #e2e8f0',background:historyIdx>0?'#f8fafc':'#fff',color:historyIdx>0?'#475569':'#cbd5e1',cursor:historyIdx>0?'pointer':'default',transition:'all 0.2s'}}><Undo size={14}/></button>
             <button onClick={redo} disabled={historyIdx>=history.length-1} style={{padding:'8px',borderRadius:'8px',border:'1px solid #e2e8f0',background:historyIdx<history.length-1?'#f8fafc':'#fff',color:historyIdx<history.length-1?'#475569':'#cbd5e1',cursor:historyIdx<history.length-1?'pointer':'default',transition:'all 0.2s'}}><Redo size={14}/></button>
           </div>
@@ -848,33 +916,50 @@ export default function IDBuilder({ records }: IDBuilderProps) {
             <span style={{fontSize:'12px',color:'#0f172a',fontWeight:700,width:'48px',textAlign:'center'}}>{Math.round(zoom*100)}%</span>
             <button onClick={()=>setZoom(z=>Math.min(2.5,+(z+0.1).toFixed(1)))} style={{background:'transparent',border:'none',color:'#64748b',width:'32px',height:'32px',cursor:'pointer',fontSize:'18px',fontWeight:600,display:'flex',alignItems:'center',justifyContent:'center'}}>+</button>
             <div style={{width:'1px',height:'20px',background:'#e2e8f0',margin:'0 8px'}}></div>
-            <button onClick={()=>setShowGrid(g=>!g)} style={{padding:'6px 12px',borderRadius:'8px',border:'none',background:showGrid?'#e0e7ff':'transparent',color:showGrid?'#4f46e5':'#64748b',cursor:'pointer',fontSize:'12px',fontWeight:600,display:'flex',alignItems:'center',gap:'6px'}}><Grid size={14}/> Grid</button>
-            <button onClick={()=>setSnap(s=>!s)} style={{padding:'6px 12px',borderRadius:'8px',border:'none',background:snap?'#f3e8ff':'transparent',color:snap?'#7c3aed':'#64748b',cursor:'pointer',fontSize:'12px',fontWeight:600,display:'flex',alignItems:'center',gap:'6px'}}><Magnet size={14}/> Snap</button>
+            {!isMobile && <button onClick={()=>setShowGrid(g=>!g)} style={{padding:'6px 12px',borderRadius:'8px',border:'none',background:showGrid?'#e0e7ff':'transparent',color:showGrid?'#4f46e5':'#64748b',cursor:'pointer',fontSize:'12px',fontWeight:600,display:'flex',alignItems:'center',gap:'6px'}}><Grid size={14}/> Grid</button>}
+            {!isMobile && <button onClick={()=>setSnap(s=>!s)} style={{padding:'6px 12px',borderRadius:'8px',border:'none',background:snap?'#f3e8ff':'transparent',color:snap?'#7c3aed':'#64748b',cursor:'pointer',fontSize:'12px',fontWeight:600,display:'flex',alignItems:'center',gap:'6px'}}><Magnet size={14}/> Snap</button>}
           </div>
         )}
 
         {/* Right Actions */}
         <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
-          <button onClick={()=>setShowFlip(p=>!p)} style={navBtnStyle} onMouseEnter={e=>(e.currentTarget as HTMLElement).style.background='#f8fafc'} onMouseLeave={e=>(e.currentTarget as HTMLElement).style.background='#fff'}>
-            <RefreshCw size={14} color="#8b5cf6"/> {showFlip?'Editor':'Preview'}
+          <button onClick={()=>{setShowFlip(p=>!p); if(isMobile) setMobileTab('canvas');}} style={navBtnStyle} onMouseEnter={e=>(e.currentTarget as HTMLElement).style.background='#f8fafc'} onMouseLeave={e=>(e.currentTarget as HTMLElement).style.background='#fff'}>
+            <RefreshCw size={14} color="#8b5cf6"/> {!isMobile && (showFlip?'Editor':'Preview')}
           </button>
-          <button onClick={handlePrint} style={navBtnStyle} onMouseEnter={e=>(e.currentTarget as HTMLElement).style.background='#f8fafc'} onMouseLeave={e=>(e.currentTarget as HTMLElement).style.background='#fff'}>
+          {!isMobile && <button onClick={handlePrint} style={navBtnStyle} onMouseEnter={e=>(e.currentTarget as HTMLElement).style.background='#f8fafc'} onMouseLeave={e=>(e.currentTarget as HTMLElement).style.background='#fff'}>
             <Printer size={14}/> Print
-          </button>
+          </button>}
           <div style={{width:'1px',height:'24px',background:'#e2e8f0',margin:'0 4px'}}></div>
           <button onClick={()=>downloadSide(activeSide)} style={{...navBtnStyle, background:'#f8fafc'}}>
             <Download size={14} color="#667eea"/> Export {activeSide}
           </button>
-          <button onClick={saveIDToServer} disabled={savingID||!selectedEmployee} style={{padding:'8px 16px',borderRadius:'8px',border:'none',background:selectedEmployee?'linear-gradient(135deg,#10b981,#059669)':'#e2e8f0',color:selectedEmployee?'#fff':'#94a3b8',cursor:selectedEmployee?'pointer':'not-allowed',fontSize:'13px',fontWeight:700,display:'flex',alignItems:'center',gap:'8px',boxShadow:selectedEmployee?'0 4px 14px rgba(16,185,129,0.3)':'none'}}>
+          <button onClick={saveIDToServer} disabled={savingID||(!selectedEmployee&&!editingID)} style={{padding:'8px 16px',borderRadius:'8px',border:'none',background:(selectedEmployee||editingID)?'linear-gradient(135deg,#10b981,#059669)':'#e2e8f0',color:(selectedEmployee||editingID)?'#fff':'#94a3b8',cursor:(selectedEmployee||editingID)?'pointer':'not-allowed',fontSize:'13px',fontWeight:700,display:'flex',alignItems:'center',gap:'8px',boxShadow:(selectedEmployee||editingID)?'0 4px 14px rgba(16,185,129,0.3)':'none'}}>
             {savingID?<Loader2 size={16} style={{animation:'spin 1s linear infinite'}}/>:<Save size={16}/>} Save ID
           </button>
         </div>
       </header>
 
+      {/* ── Mobile Tab Bar ── */}
+      {isMobile && (
+        <div style={{display:'flex',background:'#fff',borderBottom:'1px solid #e2e8f0',flexShrink:0}}>
+          {([
+            {id:'layers', label:'Layers', icon:'☰'},
+            {id:'canvas', label:'Canvas', icon:'🖼'},
+            {id:'props',  label:'Properties', icon:'⚙'},
+          ] as const).map(tab => (
+            <button key={tab.id} onClick={()=>setMobileTab(tab.id)}
+              style={{flex:1,padding:'10px 4px',border:'none',background:'transparent',cursor:'pointer',fontSize:'12px',fontWeight:mobileTab===tab.id?700:400,color:mobileTab===tab.id?'#667eea':'#94a3b8',borderBottom:mobileTab===tab.id?'2px solid #667eea':'2px solid transparent',display:'flex',flexDirection:'column',alignItems:'center',gap:'2px'}}>
+              <span style={{fontSize:'16px'}}>{tab.icon}</span>
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div style={{display:'flex',flex:1,overflow:'hidden'}}>
         
         {/* ════════════════════════════════════ LEFT PANEL (Assets & Layers) ══ */}
-        <div style={{width:'300px',flexShrink:0,background:'#fff',borderRight:'1px solid #e2e8f0',display:'flex',flexDirection:'column',overflow:'hidden',boxShadow:'4px 0 24px rgba(0,0,0,0.02)',zIndex:10}}>
+        <div style={{width:isMobile?'100%':'300px',flexShrink:0,background:'#fff',borderRight:isMobile?'none':'1px solid #e2e8f0',display:isMobile?(mobileTab==='layers'?'flex':'none'):'flex',flexDirection:'column',overflow:'hidden',boxShadow:isMobile?'none':'4px 0 24px rgba(0,0,0,0.02)',zIndex:10}}>
           <div style={{padding:'20px 20px 10px',background:'#f8fafc',borderBottom:'1px solid #e2e8f0'}}>
             <SegmentedControl options={[{label:'Front Card',value:'front'},{label:'Back Card',value:'back'}]} value={activeSide} onChange={(v:any)=>{setActiveSide(v);setSelectedFieldId(null);setSelectedLayer(null);}}/>
           </div>
@@ -1014,16 +1099,41 @@ export default function IDBuilder({ records }: IDBuilderProps) {
               </div>
             </div>
           ) : (
-            <div style={{flex:1,overflow:'auto',display:'flex',flexDirection:'row',gap:'64px',alignItems:'center',justifyContent:'center',padding:'60px 40px',position:'relative',zIndex:1}}
+            <div style={{flex:1,overflow:'auto',display:'flex',flexDirection:'column',gap:isMobile?'0':'64px',alignItems:'center',justifyContent:isMobile?'flex-start':'center',padding:isMobile?'16px 12px':'60px 40px',position:'relative',zIndex:1}}
                  onMouseDown={(e)=>{if(e.target===e.currentTarget){setSelectedFieldId(null);setSelectedLayer(null);}}}>
-              {renderCard('front')}
-              {renderCard('back')}
+              {/* Mobile: show front/back switcher + single card */}
+              {isMobile ? (
+                <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'12px',width:'100%'}}>
+                  {/* Front/Back switcher */}
+                  <div style={{display:'flex',background:'#e2e8f0',borderRadius:'10px',padding:'3px',gap:'3px',width:'100%',maxWidth:'300px'}}>
+                    {(['front','back'] as const).map(side => (
+                      <button key={side} onClick={()=>{setActiveSide(side);setSelectedFieldId(null);setSelectedLayer(null);}}
+                        style={{flex:1,padding:'8px',borderRadius:'8px',border:'none',cursor:'pointer',fontSize:'13px',fontWeight:700,
+                          background:activeSide===side?'#fff':'transparent',
+                          color:activeSide===side?'#0f172a':'#94a3b8',
+                          boxShadow:activeSide===side?'0 1px 4px rgba(0,0,0,0.1)':'none',
+                          transition:'all 0.15s'}}>
+                        {side==='front'?'▣ Front':'▢ Back'}
+                      </button>
+                    ))}
+                  </div>
+                  {/* Single active card */}
+                  {renderCard(activeSide)}
+                  {/* Hint */}
+                  <p style={{fontSize:'11px',color:'#94a3b8',margin:'4px 0 0',textAlign:'center'}}>Tap fields to edit • Switch tabs for layers & properties</p>
+                </div>
+              ) : (
+                <div style={{display:'flex',flexDirection:'row',gap:'64px',alignItems:'center',justifyContent:'center'}}>
+                  {renderCard('front')}
+                  {renderCard('back')}
+                </div>
+              )}
             </div>
           )}
         </div>
 
         {/* ════════════════════════════════════ RIGHT PANEL (Properties) ══ */}
-        <div style={{width:'320px',flexShrink:0,background:'#fff',borderLeft:'1px solid #e2e8f0',display:'flex',flexDirection:'column',boxShadow:'-4px 0 24px rgba(0,0,0,0.02)',zIndex:10}}>
+        <div style={{width:isMobile?'100%':'320px',flexShrink:0,background:'#fff',borderLeft:isMobile?'none':'1px solid #e2e8f0',display:isMobile?(mobileTab==='props'?'flex':'none'):'flex',flexDirection:'column',boxShadow:isMobile?'none':'-4px 0 24px rgba(0,0,0,0.02)',zIndex:10}}>
           {/* Properties Header */}
           <div style={{height:'56px',borderBottom:'1px solid #e2e8f0',display:'flex',alignItems:'center',justifyContent:'space-between',padding:'0 20px',background:'#f8fafc'}}>
             <div style={{display:'flex',alignItems:'center',gap:'8px'}}>

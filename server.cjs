@@ -114,6 +114,16 @@ app.delete('/api/saved-ids/:id', (req, res) => {
   fs.writeFileSync(IDS_FILE, JSON.stringify(updated, null, 2));
   res.sendStatus(200);
 });
+app.patch('/api/saved-ids/:id', (req, res) => {
+  try {
+    const data = JSON.parse(fs.readFileSync(SAVED_IDS_FILE, 'utf8'));
+    const idx = data.findIndex(e => String(e.id) === String(req.params.id));
+    if (idx === -1) return res.status(404).json({ error: 'Not found' });
+    data[idx] = { ...data[idx], ...req.body };
+    fs.writeFileSync(SAVED_IDS_FILE, JSON.stringify(data, null, 2));
+    res.json(data[idx]);
+  } catch (e) { res.status(500).json({ error: 'Server error' }); }
+});
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`-----------------------------------------`);

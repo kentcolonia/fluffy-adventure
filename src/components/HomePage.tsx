@@ -7,9 +7,10 @@ interface Props {
   savedIDs: any[];
   employeeDatabase: any[];
   onNavigate: (section: ActiveSection) => void;
+  onAddPersonnel: () => void;
 }
 
-export default function HomePage({ records, savedIDs, employeeDatabase, onNavigate }: Props) {
+export default function HomePage({ records, savedIDs, employeeDatabase, onNavigate, onAddPersonnel }: Props) {
   const stayIn = records.filter(r => r.indication === 'Stay-In').length;
   const stayOut = records.filter(r => r.indication === 'Stay-Out').length;
   const now = new Date();
@@ -24,7 +25,7 @@ export default function HomePage({ records, savedIDs, employeeDatabase, onNaviga
   ];
 
   const quickActions = [
-    { label: 'Add Personnel', desc: 'Register a new employee', icon: <Plus size={22}/>, color: '#667eea', gradient: 'linear-gradient(135deg,#667eea,#764ba2)', section: 'add' as ActiveSection },
+    { label: 'Add Personnel', desc: 'Register a new employee', icon: <Plus size={22}/>, color: '#667eea', gradient: 'linear-gradient(135deg,#667eea,#764ba2)', section: 'add' as ActiveSection, isModal: true },
     { label: 'ID Builder', desc: 'Design employee ID cards', icon: <CreditCard size={22}/>, color: '#ec4899', gradient: 'linear-gradient(135deg,#ec4899,#be185d)', section: 'idbuilder' as ActiveSection },
     { label: 'Load Database', desc: 'Import from Excel', icon: <FileSpreadsheet size={22}/>, color: '#10b981', gradient: 'linear-gradient(135deg,#10b981,#059669)', section: 'database' as ActiveSection },
     { label: 'View Records', desc: 'Browse all personnel', icon: <Users size={22}/>, color: '#f59e0b', gradient: 'linear-gradient(135deg,#f59e0b,#d97706)', section: 'dashboard' as ActiveSection },
@@ -36,7 +37,7 @@ export default function HomePage({ records, savedIDs, employeeDatabase, onNaviga
   return (
     <div>
       {/* Hero */}
-      <div style={{ background: 'linear-gradient(135deg,#667eea 0%,#764ba2 50%,#ec4899 100%)', borderRadius: '24px', padding: '36px 40px', marginBottom: '28px', color: '#fff', position: 'relative', overflow: 'hidden' }}>
+      <div style={{ background: 'linear-gradient(135deg,#667eea 0%,#764ba2 50%,#ec4899 100%)', borderRadius: '20px', padding: '24px 20px', marginBottom: '20px', color: '#fff', position: 'relative', overflow: 'hidden' }}>
         <div style={{ position: 'absolute', top: '-40px', right: '-40px', width: '220px', height: '220px', borderRadius: '50%', background: 'rgba(255,255,255,0.06)' }}/>
         <div style={{ position: 'absolute', bottom: '-60px', right: '80px', width: '160px', height: '160px', borderRadius: '50%', background: 'rgba(255,255,255,0.04)' }}/>
         <div style={{ position: 'absolute', top: '20px', right: '180px', width: '80px', height: '80px', borderRadius: '50%', background: 'rgba(255,255,255,0.05)' }}/>
@@ -45,7 +46,7 @@ export default function HomePage({ records, savedIDs, employeeDatabase, onNaviga
             <div style={{ background: 'rgba(255,255,255,0.2)', borderRadius: '10px', padding: '8px', display: 'flex', backdropFilter: 'blur(10px)' }}>
               <Shield size={20} color="white"/>
             </div>
-            <span style={{ fontSize: '12px', fontWeight: 600, letterSpacing: '2px', opacity: 0.8, textTransform: 'uppercase' }}>Porter Access Control</span>
+            <span style={{ fontSize: '12px', fontWeight: 600, letterSpacing: '2px', opacity: 0.8, textTransform: 'uppercase' }}>AVPass Control</span>
           </div>
           <h1 style={{ margin: '0 0 8px', fontSize: '32px', fontWeight: 900, lineHeight: 1.1 }}>Welcome back! 👋</h1>
           <p style={{ margin: '0 0 6px', opacity: 0.85, fontSize: '14px' }}>{dateStr}</p>
@@ -53,7 +54,7 @@ export default function HomePage({ records, savedIDs, employeeDatabase, onNaviga
             <Clock size={13}/> {timeStr} — System Online
           </p>
           <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-            <button onClick={() => onNavigate('add')}
+            <button onClick={onAddPersonnel}
               style={{ background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(10px)', color: '#fff', border: '1px solid rgba(255,255,255,0.3)', borderRadius: '12px', padding: '10px 22px', cursor: 'pointer', fontSize: '13px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px', transition: 'all 0.2s' }}
               onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.3)'}
               onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.2)'}>
@@ -70,7 +71,7 @@ export default function HomePage({ records, savedIDs, employeeDatabase, onNaviga
       </div>
 
       {/* Stats Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: '16px', marginBottom: '28px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: '12px', marginBottom: '20px' }}>
         {stats.map((s, i) => (
           <div key={i} onClick={() => onNavigate(s.section)} style={{ background: '#fff', borderRadius: '16px', border: '1px solid #f1f5f9', padding: '20px', cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 1px 6px rgba(0,0,0,0.04)' }}
             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 8px 24px rgba(0,0,0,0.08)'; }}
@@ -85,7 +86,7 @@ export default function HomePage({ records, savedIDs, employeeDatabase, onNaviga
         ))}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: '16px' }}>
 
         {/* Quick Actions */}
         <div style={{ background: '#fff', borderRadius: '20px', border: '1px solid #f1f5f9', overflow: 'hidden', boxShadow: '0 1px 6px rgba(0,0,0,0.04)' }}>
@@ -95,7 +96,7 @@ export default function HomePage({ records, savedIDs, employeeDatabase, onNaviga
           </div>
           <div style={{ padding: '12px' }}>
             {quickActions.map((a, i) => (
-              <button key={i} onClick={() => onNavigate(a.section)}
+              <button key={i} onClick={() => (a as any).isModal ? onAddPersonnel() : onNavigate(a.section)}
                 style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '14px', padding: '11px 12px', borderRadius: '12px', border: 'none', cursor: 'pointer', background: 'transparent', textAlign: 'left', transition: 'all 0.15s', marginBottom: '4px' }}
                 onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#f8fafc'}
                 onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}>
@@ -149,7 +150,7 @@ export default function HomePage({ records, savedIDs, employeeDatabase, onNaviga
       </div>
 
       {/* System Info */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '16px', marginTop: '20px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: '12px', marginTop: '16px' }}>
         {[
           { label: 'Database Records', value: employeeDatabase.length, icon: <FileSpreadsheet size={16}/>, color: '#10b981', desc: 'Employee data loaded' },
           { label: 'ID Cards Saved', value: savedIDs.length, icon: <CreditCard size={16}/>, color: '#8b5cf6', desc: 'Ready to print' },
