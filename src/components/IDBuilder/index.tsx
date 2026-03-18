@@ -673,7 +673,20 @@ export default function IDBuilder({ records, editingID, onEditSaved }: IDBuilder
         const img=await li(photo);
         const pw=sd.photoW/100*CARD_W,ph=sd.photoH/100*CARD_H;
         const px=sd.photoX/100*CARD_W-pw/2,py=sd.photoY/100*CARD_H-ph/2;
-        drawImg(img,px,py,pw,ph,{strokeW:sd.photoStrokeWidth,strokeC:sd.photoStrokeColor,shadowBlur:sd.photoShadowBlur,shadowC:sd.photoShadowColor,overlayC:sd.photoOverlayColor,overlayOp:sd.photoOverlayOpacity});
+        // Use objectFit:contain logic (match HTML preview)
+        const imgAR=img.naturalWidth/img.naturalHeight, boxAR=pw/ph;
+        let dw=pw,dh=ph,dx=px,dy=py;
+        if(imgAR>boxAR){dh=pw/imgAR;dy=py+(ph-dh)/2;}else{dw=ph*imgAR;dx=px+(pw-dw)/2;}
+        // Apply brightness/contrast filter
+        if((sd.photoBrightness&&sd.photoBrightness!==100)||(sd.photoContrast&&sd.photoContrast!==100)){
+          const oc=document.createElement('canvas');oc.width=Math.round(dw*4);oc.height=Math.round(dh*4);
+          const oc2=oc.getContext('2d')!;
+          oc2.filter=`brightness(${(sd.photoBrightness??100)/100}) contrast(${(sd.photoContrast??100)/100})`;
+          oc2.drawImage(img,0,0,oc.width,oc.height);
+          drawImg(oc as unknown as HTMLImageElement,dx,dy,dw,dh,{strokeW:sd.photoStrokeWidth,strokeC:sd.photoStrokeColor,shadowBlur:sd.photoShadowBlur,shadowC:sd.photoShadowColor,overlayC:sd.photoOverlayColor,overlayOp:sd.photoOverlayOpacity});
+        } else {
+          drawImg(img,dx,dy,dw,dh,{strokeW:sd.photoStrokeWidth,strokeC:sd.photoStrokeColor,shadowBlur:sd.photoShadowBlur,shadowC:sd.photoShadowColor,overlayC:sd.photoOverlayColor,overlayOp:sd.photoOverlayOpacity});
+        }
       }catch{}
     }
 
@@ -685,7 +698,11 @@ export default function IDBuilder({ records, editingID, onEditSaved }: IDBuilder
           await drawSigRecolor(employeeSig,sx,sy,sw,sh,sd.sigColorizeColor,sd.sigInkDark!==false,{strokeW:sd.sigStrokeWidth,strokeC:sd.sigStrokeColor,shadowBlur:sd.sigShadowBlur,shadowC:sd.sigShadowColor});
         } else {
           const img=await li(employeeSig);
-          drawImg(img,sx,sy,sw,sh,{strokeW:sd.sigStrokeWidth,strokeC:sd.sigStrokeColor,shadowBlur:sd.sigShadowBlur,shadowC:sd.sigShadowColor});
+          // Use objectFit:contain for sig too
+          const sImgAR=img.naturalWidth/img.naturalHeight, sBoxAR=sw/sh;
+          let sdw=sw,sdh=sh,sdx=sx,sdy=sy;
+          if(sImgAR>sBoxAR){sdh=sw/sImgAR;sdy=sy+(sh-sdh)/2;}else{sdw=sh*sImgAR;sdx=sx+(sw-sdw)/2;}
+          drawImg(img,sdx,sdy,sdw,sdh,{strokeW:sd.sigStrokeWidth,strokeC:sd.sigStrokeColor,shadowBlur:sd.sigShadowBlur,shadowC:sd.sigShadowColor});
         }
       }catch{}
     }
@@ -694,20 +711,25 @@ export default function IDBuilder({ records, editingID, onEditSaved }: IDBuilder
       const ff=f.fontFamily||"'Inter','Segoe UI',sans-serif";
       ctx.font=`${f.italic?'italic ':''}${f.bold?'bold ':''}${f.fontSize}px ${ff}`;
       ctx.textAlign=f.align;
+      ctx.textBaseline='middle';
       const x=f.align==='right'?(100-f.x)/100*CARD_W:f.x/100*CARD_W;
-      const y=f.y/100*CARD_H;
+      const cy=f.y/100*CARD_H; // center Y (matches HTML translateY(-50%))
       const maxW=((f.w??90)/100)*CARD_W;
       const words=f.value.split(' '); let line='',lines:string[]=[];
       for(const ww of words){ const t=line+(line?' ':'')+ww; if(ctx.measureText(t).width>maxW&&line){lines.push(line);line=ww;}else line=t; }
       lines.push(line);
+      // Total block height centered at cy
+      const lineH=f.fontSize*1.3;
+      const totalH=lines.length*lineH;
+      const startY=cy - totalH/2 + lineH/2;
       if(f.shadowBlur&&f.shadowBlur>0){ctx.shadowColor=f.shadowColor||'rgba(0,0,0,0.6)';ctx.shadowBlur=f.shadowBlur;}else{ctx.shadowBlur=0;}
       lines.forEach((l,i)=>{
-        const ly=y+i*f.fontSize*1.3;
+        const ly=startY+i*lineH;
         if(f.overlayBg&&f.overlayOpacity&&f.overlayOpacity>0){
           const mw=ctx.measureText(l).width;
           const ox=f.align==='center'?x-mw/2:f.align==='right'?x-mw:x;
           ctx.globalAlpha=f.overlayOpacity/100; ctx.fillStyle=f.overlayBg;
-          ctx.fillRect(ox-4,ly-f.fontSize,mw+8,f.fontSize*1.2); ctx.globalAlpha=1;
+          ctx.fillRect(ox-4,ly-f.fontSize/2,mw+8,f.fontSize*1.2); ctx.globalAlpha=1;
         }
         if(f.strokeWidth&&f.strokeWidth>0){ctx.strokeStyle=f.strokeColor||'#000';ctx.lineWidth=f.strokeWidth;ctx.lineJoin='round';ctx.strokeText(l,x,ly);}
         ctx.fillStyle=f.color; ctx.fillText(l,x,ly);
@@ -715,7 +737,7 @@ export default function IDBuilder({ records, editingID, onEditSaved }: IDBuilder
           const mw=ctx.measureText(l).width;
           const ux=f.align==='center'?x-mw/2:f.align==='right'?x-mw:x;
           ctx.save();ctx.strokeStyle=f.color;ctx.lineWidth=Math.max(0.5,f.fontSize*0.06);
-          ctx.beginPath();ctx.moveTo(ux,ly+f.fontSize*0.12);ctx.lineTo(ux+mw,ly+f.fontSize*0.12);ctx.stroke();ctx.restore();
+          ctx.beginPath();ctx.moveTo(ux,ly+f.fontSize*0.6);ctx.lineTo(ux+mw,ly+f.fontSize*0.6);ctx.stroke();ctx.restore();
         }
       });
       ctx.shadowBlur=0;
@@ -724,12 +746,52 @@ export default function IDBuilder({ records, editingID, onEditSaved }: IDBuilder
     return cv.toDataURL('image/jpeg', 0.95);
   },[front,back,employeePhoto,employeeSig]);
 
-  const downloadSide = async(w:'front'|'back')=>{ const url=await renderSide(w); const a=document.createElement('a'); a.download=`id-${w}.jpg`; a.href=url; a.click(); };
+  const captureCard = async (which: 'front'|'back'): Promise<string> => {
+    const ref = which === 'front' ? cardFrontRef : cardBackRef;
+    const h2c = (window as any).html2canvas;
+    if (!ref.current || !h2c) return renderSide(which);
+    try {
+      const canvas = await h2c(ref.current, {
+        scale: 4,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: null,
+        logging: false,
+        imageTimeout: 0,
+        width: ref.current.offsetWidth,
+        height: ref.current.offsetHeight,
+      });
+      // Crop to exact card size
+      const out = document.createElement('canvas');
+      out.width  = CARD_W * 4;
+      out.height = CARD_H * 4;
+      out.getContext('2d')!.drawImage(canvas, 0, 0);
+      return out.toDataURL('image/jpeg', 0.95);
+    } catch(err) {
+      console.warn('html2canvas failed', err);
+      return renderSide(which);
+    }
+  };
+
+  const downloadSide = async(w:'front'|'back')=>{
+    // Make sure correct side is active and visible
+    if (activeSide !== w) {
+      setActiveSide(w);
+      await new Promise(r => setTimeout(r, 200));
+    }
+    const url = await captureCard(w);
+    const a = document.createElement('a');
+    a.download = `id-${w}-${Date.now()}.jpg`;
+    a.href = url;
+    a.click();
+  };
 
   const saveIDToServer = async()=>{
     if(!selectedEmployee&&!editingID) return;
     setSavingID(true);
-    const [fi,bi]=await Promise.all([renderSide('front'),renderSide('back')]);
+    // Capture both sides - use renderSide (canvas renderer) for saving
+    // html2canvas only captures visible elements; renderSide works for both
+    const [fi, bi] = await Promise.all([renderSide('front'), renderSide('back')]);
     const name = selectedEmployee?.name || editingID?.employeeName || '';
     const pos  = selectedEmployee?.position || editingID?.position || '';
     try{
