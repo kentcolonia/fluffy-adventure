@@ -2,14 +2,33 @@ import React, { useState, useEffect } from 'react';
 import { Users, Plus, FileSpreadsheet, CreditCard, Download, Menu, Shield, Printer, X, Home } from 'lucide-react';
 import { API_URL } from './types';
 import type { EmployeeRecord, Employee, ActiveSection, EditingID } from './types';
+import LoginPage from './components/LoginPage';
 import HomePage from './components/HomePage';
 import PersonnelRecords from './components/PersonnelRecords';
 import AddPersonnelModal from './components/AddPersonnel';
 import LoadDatabase from './components/LoadDatabase';
 import SavedIDs from './components/SavedIDs';
 import IDBuilder from './components/IDBuilder';
+import TemplateManager from './components/TemplateManager';
+import AccountManager from './components/AccountManager';
 
 export default function App() {
+  // ── Auth state ──
+  const [authUser, setAuthUser] = useState<{username:string;role:string;token:string}|null>(() => {
+    try {
+      const token = localStorage.getItem('avpass_token');
+      const user = localStorage.getItem('avpass_user');
+      if (token && user) return { ...JSON.parse(user), token };
+    } catch {}
+    return null;
+  });
+
+  const handleLogout = () => {
+    localStorage.removeItem('avpass_token');
+    localStorage.removeItem('avpass_user');
+    setAuthUser(null);
+  };
+
   const [records, setRecords] = useState<EmployeeRecord[]>([]);
   const [employeeDatabase, setEmployeeDatabase] = useState<Employee[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -18,6 +37,7 @@ export default function App() {
   const [savedIDs, setSavedIDs] = useState<any[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingID, setEditingID] = useState<EditingID | null>(null);
+  const [pendingTemplate, setPendingTemplate] = useState<any | null>(null);
 
   // Detect mobile
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
@@ -57,6 +77,7 @@ export default function App() {
     { id: 'add',       label: 'Add',         icon: <Plus size={18}/>,            color: '#10b981', isModal: true },
     { id: 'idbuilder', label: 'ID Builder',  icon: <CreditCard size={18}/>,      color: '#ec4899' },
     { id: 'idrecords', label: 'Saved IDs',   icon: <Download size={18}/>,        color: '#8b5cf6', badge: savedIDs.length || null },
+    { id: 'templates', label: 'Templates',    icon: <CreditCard size={18}/>,      color: '#f59e0b' },
   ];
 
   const allNavItems: { id: ActiveSection; label: string; icon: React.ReactNode; color: string; badge?: number | null; isModal?: boolean }[] = [
@@ -65,18 +86,23 @@ export default function App() {
     { id: 'add',       label: 'Add Personnel',  icon: <Plus size={16}/>,            color: '#10b981', isModal: true },
     { id: 'database',  label: 'Load Database',  icon: <FileSpreadsheet size={16}/>, color: '#f59e0b', badge: employeeDatabase.length || null },
     { id: 'idbuilder', label: 'ID Builder',     icon: <CreditCard size={16}/>,      color: '#ec4899' },
-    { id: 'idrecords', label: 'Saved IDs',      icon: <Download size={16}/>,        color: '#8b5cf6', badge: savedIDs.length || null },
+    { id: 'idrecords',  label: 'Saved IDs',      icon: <Download size={16}/>,        color: '#8b5cf6', badge: savedIDs.length || null },
+    { id: 'templates',  label: 'ID Templates',   icon: <CreditCard size={16}/>,      color: '#f59e0b', badge: null },
+    { id: 'accounts',   label: 'Accounts',        icon: <Users size={16}/>,           color: '#64748b' },
   ];
 
   const sectionTitle: Record<ActiveSection, string> = {
     home: 'Home', dashboard: 'Personnel Records', add: 'Add Personnel',
-    database: 'Load Database', idbuilder: 'ID Builder', idrecords: 'Saved IDs',
+    database: 'Load Database', idbuilder: 'ID Builder', idrecords: 'Saved IDs', templates: 'ID Templates', accounts: 'Account Manager',
   };
 
   const handleNav = (item: typeof allNavItems[0]) => {
     if (item.isModal) { setShowAddModal(true); setSidebarOpen(false); }
     else { setActiveSection(item.id); setSidebarOpen(false); }
   };
+
+  // Show login if not authenticated
+  if (!authUser) return <LoginPage onLogin={setAuthUser} />;
 
   if (isLoading) return (
     <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg,#667eea 0%,#764ba2 50%,#ec4899 100%)', flexDirection: 'column', gap: '16px' }}>
@@ -227,6 +253,18 @@ export default function App() {
                 <Printer size={13} />{!isMobile && ' Print'}
               </button>
             )}
+            <span style={{ color: '#e2e8f0' }}>|</span>
+            {/* User badge */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#f8fafc', borderRadius: '10px', padding: '4px 10px 4px 5px', border: '1px solid #e2e8f0' }}>
+              <div style={{ width: '26px', height: '26px', borderRadius: '50%', background: 'linear-gradient(135deg,#667eea,#764ba2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <span style={{ color: '#fff', fontSize: '11px', fontWeight: 700 }}>{authUser.username.charAt(0).toUpperCase()}</span>
+              </div>
+              {!isMobile && <span style={{ fontSize: '12px', fontWeight: 600, color: '#0f172a' }}>{authUser.username}</span>}
+            </div>
+            <button onClick={handleLogout}
+              style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: '8px', padding: '6px 12px', cursor: 'pointer', fontSize: '12px', fontWeight: 600, whiteSpace: 'nowrap' }}>
+              {isMobile ? '⏻' : 'Sign Out'}
+            </button>
           </div>
         </header>
 
@@ -235,7 +273,11 @@ export default function App() {
           {activeSection === 'home' && <HomePage records={records} savedIDs={savedIDs} employeeDatabase={employeeDatabase} onNavigate={setActiveSection} onAddPersonnel={() => setShowAddModal(true)} />}
           {activeSection === 'dashboard' && <PersonnelRecords records={records} setRecords={setRecords} employeeDatabase={employeeDatabase} onAddPersonnel={() => setShowAddModal(true)} />}
           {activeSection === 'database' && <LoadDatabase employeeDatabase={employeeDatabase} setEmployeeDatabase={setEmployeeDatabase} />}
-          {activeSection === 'idbuilder' && <IDBuilder records={records} editingID={editingID} onEditSaved={_id => { setEditingID(null); }} />}
+          {activeSection === 'idbuilder' && <IDBuilder records={records} editingID={editingID} onEditSaved={_id => { setEditingID(null); }} pendingTemplate={pendingTemplate} onTemplatLoaded={() => setPendingTemplate(null)} />}
+          {activeSection === 'templates' && <TemplateManager />
+          }
+          {activeSection === 'accounts' && <AccountManager currentUser={authUser} />
+          }
           {activeSection === 'idrecords' && <SavedIDs savedIDs={savedIDs} setSavedIDs={setSavedIDs} onEditInBuilder={entry => { setEditingID({ id: entry.id, employeeName: entry.employeeName, position: entry.position, front: entry.front, back: entry.back }); setActiveSection('idbuilder'); }} />}
         </div>
 

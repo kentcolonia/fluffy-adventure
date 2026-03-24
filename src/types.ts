@@ -68,7 +68,7 @@ export interface IDTemplate {
   back: IDSide;
 }
 
-export type ActiveSection = 'home' | 'dashboard' | 'add' | 'database' | 'idbuilder' | 'idrecords';
+export type ActiveSection = 'home' | 'dashboard' | 'add' | 'database' | 'idbuilder' | 'idrecords' | 'templates' | 'accounts';
 
 export interface EditingID {
   id: string;

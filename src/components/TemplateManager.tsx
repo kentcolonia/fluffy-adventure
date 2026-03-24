@@ -1,8 +1,8 @@
 import React from 'react';
-import { Download, Loader2, Search, Settings, Image as ImageIcon, Save, Printer, RefreshCw, Undo, Redo, Grid, Magnet, X, MousePointer2, LayoutTemplate, Layers, Pencil, Trash2 } from 'lucide-react';
-import { API_URL } from '../../types';
-import type { EmployeeRecord, IDField, IDSide, IDTemplate } from '../../types';
-import { resolveImg, hexToColorFilter, hexToColorFilterWhite } from '../../utils';
+import { Download, Loader2, Upload, Settings, Image as ImageIcon, Save, Printer, RefreshCw, Undo, Redo, Grid, Magnet, X, MousePointer2, LayoutTemplate, Layers, Pencil, Trash2 } from 'lucide-react';
+import { API_URL } from '../types';
+import type { IDField, IDSide, IDTemplate } from '../types';
+import { hexToColorFilter, hexToColorFilterWhite } from '../utils';
 
 // ── DEFAULT FIELDS ──
 const defaultFrontFields: IDField[] = [
@@ -277,14 +277,10 @@ const FieldEditor = React.memo(({ field, onUpdate }: FieldEditorProps) => {
 
 
 // ── MAIN ID BUILDER COMPONENT ──
-interface IDBuilderProps {
-  records: EmployeeRecord[];
-  editingID?: { id: string; employeeName: string; position: string; front: IDSide; back: IDSide } | null;
-  onEditSaved?: (id: string) => void;
-  pendingTemplate?: IDTemplate | null;
-  onTemplatLoaded?: () => void;
+interface TemplateManagerProps {
+  editingTemplate?: IDTemplate | null;
 }
-export default function IDBuilder({ records, editingID, onEditSaved, pendingTemplate, onTemplatLoaded }: IDBuilderProps) {
+export default function TemplateManager({ editingTemplate }: TemplateManagerProps) {
   const CARD_W = 214, CARD_H = 340; // CR80 portrait: 54mm x 85.6mm
 
   // ── core state ──
@@ -320,28 +316,22 @@ export default function IDBuilder({ records, editingID, onEditSaved, pendingTemp
   const cardBackRef  = React.useRef<HTMLDivElement>(null);
 
   // ── employee ──
-  const [selectedEmployee, setSelectedEmployee] = React.useState<EmployeeRecord|null>(null);
-  const [empSearch,        setEmpSearch]         = React.useState('');
-  const empSearchRef = React.useRef<HTMLInputElement>(null);
-  const [showEmpDrop,      setShowEmpDrop]       = React.useState(false);
 
   // ── card data ──
   const [front, setFront] = React.useState<IDSide>(
-    editingID?.front ?? {
+    editingTemplate?.front ?? {
       background:null, fields: defaultFrontFields,
       photoX:50, photoY:30, photoW:55, photoH:38, showPhoto:true,
       sigX:50,   sigY:74,  sigW:40,  sigH:8,   showSig:true,
     }
   );
   const [back, setBack] = React.useState<IDSide>(
-    editingID?.back ?? {
+    editingTemplate?.back ?? {
       background:null, fields: defaultBackFields,
       photoX:50, photoY:30, photoW:55, photoH:38, showPhoto:false,
       sigX:50,   sigY:74,  sigW:40,  sigH:8,   showSig:false,
     }
   );
-  // Pre-fill employee name from editingID
-  const [_editingIDRef] = React.useState(editingID);
 
   // ── history ──
   const [history,    setHistory]    = React.useState<{front:IDSide;back:IDSide}[]>([]);
@@ -365,12 +355,13 @@ export default function IDBuilder({ records, editingID, onEditSaved, pendingTemp
   // ── templates ──
   const [templates,       setTemplates]       = React.useState<IDTemplate[]>([]);
   const [showTemplateModal, setShowTemplateModal] = React.useState(false);
-  const [confirmLoad, setConfirmLoad] = React.useState<any>(null); // pending template to load
+  const [templateName,    setTemplateName]    = React.useState('');
+  const [templateCompany, setTemplateCompany] = React.useState('');
   React.useEffect(()=>{ fetch(`${API_URL}/templates`).then(r=>r.ok?r.json():[]).then(setTemplates).catch(()=>{}); },[]);
 
   // ── notifications ──
   const [msg,       setMsg]       = React.useState<{type:'success'|'error';text:string}|null>(null);
-  const [savingID,  setSavingID]  = React.useState(false);
+  const [savingTemplate,  setSavingTemplate]  = React.useState(false);
   const [showFlip,  setShowFlip]  = React.useState(false);
 
   // ── Mobile responsive ──
@@ -387,20 +378,7 @@ export default function IDBuilder({ records, editingID, onEditSaved, pendingTemp
     return () => window.removeEventListener('resize', h);
   }, []);
 
-  // ── Load saved ID data when editing ──
-  React.useEffect(() => {
-    if (_editingIDRef) {
-      setEmpSearch(_editingIDRef.employeeName);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
-  // ── Load pending template from TemplateManager (ask first) ──
-  React.useEffect(() => {
-    if (pendingTemplate) {
-      setConfirmLoad(pendingTemplate);
-    }
-  }, [pendingTemplate]);
   const [flipFace,  setFlipFace]  = React.useState<'front'|'back'>('front');
   const [flipAnim,  setFlipAnim]  = React.useState(false);
   const [frontUrl,  setFrontUrl]  = React.useState<string|null>(null);
@@ -444,45 +422,31 @@ export default function IDBuilder({ records, editingID, onEditSaved, pendingTemp
   const side    = activeSide==='front' ? front : back;
   const setSide = activeSide==='front' ? setFront : setBack;
   const activeRef = activeSide==='front' ? cardFrontRef : cardBackRef;
-  const selectedField = side.fields.find(f=>f.id===selectedFieldId)||null;
+  const selectedField = side.fields.find((f:IDField)=>f.id===selectedFieldId)||null;
 
   const updateField = (id:string, updates:Partial<IDField>) =>
-    setSide(p=>({...p, fields:p.fields.map(f=>f.id===id?{...f,...updates}:f)}));
+    setSide((p:IDSide)=>({...p, fields:p.fields.map((f:IDField)=>f.id===id?{...f,...updates}:f)}));
   const updateSideProps = (updates:Partial<IDSide>) =>
-    setSide(p=>({...p,...updates}));
+    setSide((p:IDSide)=>({...p,...updates}));
 
-  const autoFill = (emp:EmployeeRecord) => {
-    setSelectedEmployee(emp); setEmpSearch(emp.name); setShowEmpDrop(false);
-    if(empSearchRef.current) empSearchRef.current.value = emp.name;
-    setFront(p=>({...p, fields:p.fields.map(f=>{
-      if(f.id==='fullname') return {...f, value:emp.name};
-      if(f.id==='nickname') {
-        // Name format: "LASTNAME,FIRSTNAME MIDDLENAME" or "LASTNAME, FIRSTNAME"
-        const commaIdx = emp.name.indexOf(',');
-        let firstName = emp.name;
-        if (commaIdx !== -1) {
-          // Get everything after the comma, trim, take first word
-          const afterComma = emp.name.slice(commaIdx + 1).trim();
-          firstName = afterComma.split(' ')[0] || afterComma;
-        }
-        return {...f, value: firstName};
-      }
-      if(f.id==='position') return {...f, value:emp.position};
-      if(f.id==='idnum' && emp.empCode) return {...f, value:emp.empCode};
-      return f;
-    })}));
+
+
+  const handleBgUpload = (e:React.ChangeEvent<HTMLInputElement>) => {
+    const file=e.target.files?.[0]; if(!file) return;
+    const r=new FileReader(); r.onload=()=>updateSideProps({background:r.result as string}); r.readAsDataURL(file); e.target.value='';
   };
 
-
-  const employeePhoto = selectedEmployee?.photo ? resolveImg(selectedEmployee.photo) : null;
-  const employeeSig   = selectedEmployee?.signature ? resolveImg(selectedEmployee.signature) : null;
+  const employeePhoto: string | null = null; // Templates use placeholder
+  const employeeSig: string | null = null; // Templates use placeholder
+  const DUMMY_PHOTO = 'data:image/svg+xml;base64,' + btoa(`<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect width="100" height="100" fill="#cbd5e1"/><circle cx="50" cy="38" r="18" fill="#94a3b8"/><ellipse cx="50" cy="80" rx="28" ry="20" fill="#94a3b8"/><text x="50" y="58" text-anchor="middle" fill="#64748b" font-size="10" font-family="sans-serif">PHOTO</text></svg>`);
+  const DUMMY_SIG = 'data:image/svg+xml;base64,' + btoa(`<svg xmlns="http://www.w3.org/2000/svg" width="200" height="60" viewBox="0 0 200 60"><rect width="200" height="60" fill="transparent"/><path d="M10 40 Q30 10 50 35 Q70 55 90 25 Q110 5 130 30 Q150 50 170 20 Q185 5 195 25" stroke="#94a3b8" stroke-width="3" fill="none" stroke-linecap="round"/><text x="100" y="55" text-anchor="middle" fill="#94a3b8" font-size="9" font-family="sans-serif">SIGNATURE</text></svg>`);
 
   const handleFieldMouseDown = (e:React.MouseEvent, fieldId:string) => {
     if (isMobile) setMobileTab('props');
     e.stopPropagation(); e.preventDefault();
     setSelectedFieldId(fieldId); setSelectedLayer(null);
     const rect = activeRef.current!.getBoundingClientRect();
-    const f = side.fields.find(f=>f.id===fieldId)!;
+    const f = side.fields.find((f:IDField)=>f.id===fieldId)!;
     const offset = { x: e.clientX-rect.left-(f.x/100*CARD_W*zoom), y: e.clientY-rect.top-(f.y/100*CARD_H*zoom) };
     isDragging.current = false;
     pendingDrag.current = { type:'field', id:fieldId, startX:e.clientX, startY:e.clientY, offset };
@@ -535,7 +499,7 @@ export default function IDBuilder({ records, editingID, onEditSaved, pendingTemp
       let y = (e.clientY-rect.top -dragOffset.y)/zoom/CARD_H*100;
       if(snap){ x=Math.round(x/5)*5; y=Math.round(y/5)*5; }
       x=Math.max(0,Math.min(100,x)); y=Math.max(0,Math.min(100,y));
-      setSide(p=>({...p, fields:p.fields.map(f=>f.id===draggingId?{...f,x,y}:f)}));
+      setSide((p:IDSide)=>({...p, fields:p.fields.map((f:IDField)=>f.id===draggingId?{...f,x,y}:f)}));
       return;
     }
     if(draggingLayer && activeRef.current) {
@@ -545,7 +509,7 @@ export default function IDBuilder({ records, editingID, onEditSaved, pendingTemp
       if(snap){ x=Math.round(x/5)*5; y=Math.round(y/5)*5; }
       x=Math.max(0,Math.min(100,x)); y=Math.max(0,Math.min(100,y));
       const xKey=draggingLayer==='photo'?'photoX':'sigX', yKey=draggingLayer==='photo'?'photoY':'sigY';
-      setSide(p=>({...p, [xKey]:x, [yKey]:y}));
+      setSide((p:IDSide)=>({...p, [xKey]:x, [yKey]:y}));
       return;
     }
     if(resizingLayer && activeRef.current) {
@@ -560,7 +524,7 @@ export default function IDBuilder({ records, editingID, onEditSaved, pendingTemp
       if(handle.includes('s')) h = Math.max(5, resizeStart.h + dy*2);
       if(handle.includes('n')) h = Math.max(5, resizeStart.h - dy*2);
       if(snap){ w=Math.round(w/5)*5; h=Math.round(h/5)*5; }
-      setSide(p=>({...p, [wKey]:w, [hKey]:h, [xKey]:x, [yKey]:y}));
+      setSide((p:IDSide)=>({...p, [wKey]:w, [hKey]:h, [xKey]:x, [yKey]:y}));
     }
   },[draggingId,draggingLayer,resizingLayer,dragOffset,layerDragOffset,resizeStart,zoom,activeSide,snap]);
 
@@ -591,12 +555,12 @@ export default function IDBuilder({ records, editingID, onEditSaved, pendingTemp
       const dx = e.key==='ArrowLeft'?-step:e.key==='ArrowRight'?step:0;
       const dy = e.key==='ArrowUp'?-step:e.key==='ArrowDown'?step:0;
       if(selectedFieldId) {
-        setSide(p=>({...p, fields:p.fields.map(f=>f.id===selectedFieldId
+        setSide((p:IDSide)=>({...p, fields:p.fields.map((f:IDField)=>f.id===selectedFieldId
           ?{...f, x:Math.max(0,Math.min(100,f.x+dx)), y:Math.max(0,Math.min(100,f.y+dy))}
           :f)}));
       } else if(selectedLayer) {
         const xKey=selectedLayer==='photo'?'photoX':'sigX', yKey=selectedLayer==='photo'?'photoY':'sigY';
-        setSide(p=>({...p, [xKey]:Math.max(0,Math.min(100,(p as any)[xKey]+dx)), [yKey]:Math.max(0,Math.min(100,(p as any)[yKey]+dy))}));
+        setSide((p:IDSide)=>({...p, [xKey]:Math.max(0,Math.min(100,(p as any)[xKey]+dx)), [yKey]:Math.max(0,Math.min(100,(p as any)[yKey]+dy))}));
       }
     };
     window.addEventListener('keydown',onKey);
@@ -711,7 +675,7 @@ export default function IDBuilder({ records, editingID, onEditSaved, pendingTemp
       }catch{}
     }
 
-    sd.fields.filter(f=>f.visible).forEach(f=>{
+    sd.fields.filter((f:IDField)=>f.visible).forEach((f:IDField)=>{
       const ff=f.fontFamily||"'Inter','Segoe UI',sans-serif";
       ctx.font=`${f.italic?'italic ':''}${f.bold?'bold ':''}${f.fontSize}px ${ff}`;
       ctx.textAlign=f.align;
@@ -790,40 +754,25 @@ export default function IDBuilder({ records, editingID, onEditSaved, pendingTemp
     a.click();
   };
 
-  const saveIDToServer = async()=>{
-    if(!selectedEmployee&&!editingID) return;
-    setSavingID(true);
-    // Capture both sides - use renderSide (canvas renderer) for saving
-    // html2canvas only captures visible elements; renderSide works for both
-    const [fi, bi] = await Promise.all([renderSide('front'), renderSide('back')]);
-    const name = selectedEmployee?.name || editingID?.employeeName || '';
-    const pos  = selectedEmployee?.position || editingID?.position || '';
-    try{
-      if(editingID){
-        // Update existing saved ID
-        const res=await fetch(`${API_URL}/saved-ids/${editingID.id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({employeeName:name,position:pos,frontImg:fi,backImg:bi,savedAt:new Date().toLocaleDateString('en-US',{year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})})});
-        if(res.ok){ setMsg({type:'success',text:`ID updated for ${name}`}); if(onEditSaved) onEditSaved(editingID.id); }
-        else setMsg({type:'error',text:'Failed to update ID'});
-      } else {
-        // Save new ID
-        const res=await fetch(`${API_URL}/saved-ids`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:`${selectedEmployee!.id}-${Date.now()}`,employeeName:name,position:pos,company:'',frontImg:fi,backImg:bi,savedAt:new Date().toLocaleDateString('en-US',{year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})})});
-        if(res.ok) setMsg({type:'success',text:`ID saved for ${name}`});
-        else setMsg({type:'error',text:'Failed to save ID'});
-      }
-    }catch{ setMsg({type:'error',text:'Connection error'}); }
-    setSavingID(false);
-    setTimeout(()=>setMsg(null),3000);
+  const saveAsTemplate = async()=>{
+    if(!templateName.trim()) return;
+    setSavingTemplate(true);
+    const t:IDTemplate={id:Date.now().toString(),name:templateName.trim(),company:templateCompany.trim(),createdAt:new Date().toLocaleDateString('en-US',{year:'numeric',month:'short',day:'numeric'}),front,back};
+    const existing = await fetch(`${API_URL}/templates`).then(r=>r.ok?r.json():[]).catch(()=>[]);
+    const updated = editingTemplate ? existing.map((x:IDTemplate)=>x.id===editingTemplate.id?t:{...x,id:x.id}) : [...existing,t];
+    await fetch(`${API_URL}/templates`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(updated)});
+    showMsg('success', editingTemplate?`Template updated!`:`Template "${t.name}" saved!`);
+    if(!editingTemplate){ setTemplateName(''); setTemplateCompany(''); }
+    setSavingTemplate(false);
   };
 
-  const loadTemplate = (t:IDTemplate)=>{ setConfirmLoad(t); };
+  const loadTemplate = (t:IDTemplate)=>{ setFront({...t.front}); setBack({...t.back}); setTemplateName(t.name); setTemplateCompany(t.company||''); pushHistory(t.front,t.back); showMsg('success',`Loaded "${t.name}" — edit and save to update`); setShowTemplateModal(false); };
   const deleteTemplateFromModal = async(id:string)=>{
     const updated = templates.filter(t=>t.id!==id);
     await fetch(`${API_URL}/templates`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(updated)});
     setTemplates(updated);
   };
-  const editTemplateInEditor = (t:IDTemplate)=>{ setShowTemplateModal(false); showMsg('success',`Go to ID Templates to edit "${t.name}"`); };
-  const doLoadTemplate = (t:IDTemplate)=>{ setFront({...t.front}); setBack({...t.back}); pushHistory(t.front,t.back); showMsg("success",`Loaded "${t.name}"`); setConfirmLoad(null); if(onTemplatLoaded) onTemplatLoaded(); };
+  const editTemplateInEditor = (t:IDTemplate)=>{ loadTemplate(t); };
 
   const renderCard = (which:'front'|'back') => {
     const sd     = which==='front'?front:back;
@@ -853,14 +802,14 @@ export default function IDBuilder({ records, editingID, onEditSaved, pendingTemp
             <div style={{position:'absolute',top:'50%',left:0,right:0,height:'1px',background:'rgba(102,126,234,0.8)',zIndex:6,pointerEvents:'none'}}/>
           </>}
 
-          {sd.showPhoto&&employeePhoto&&(
+          {sd.showPhoto&&(
             <div onMouseDown={e=>{e.stopPropagation(); if(isActive){handleLayerMouseDown(e,'photo');}else{setActiveSide(which);setSelectedLayer('photo');setSelectedFieldId(null);}}}
               style={{position:'absolute',left:`${sd.photoX}%`,top:`${sd.photoY}%`,width:`${sd.photoW}%`,height:`${sd.photoH}%`,transform:'translate(-50%,-50%)',
                 cursor:isActive?(draggingLayer==='photo'?'grabbing':'grab'):'pointer', zIndex:8,
                 boxShadow:sd.photoShadowBlur&&sd.photoShadowBlur>0?`0 0 ${sd.photoShadowBlur}px ${sd.photoShadowColor||'rgba(0,0,0,0.6)'}`:'none',
                 outline:(isActive&&selectedLayer==='photo')?'2px dashed rgba(59,130,246,0.9)':(sd.photoStrokeWidth&&sd.photoStrokeWidth>0?`${sd.photoStrokeWidth}px solid ${sd.photoStrokeColor||'#000000'}`:'none'),
                 outlineOffset:(isActive&&selectedLayer==='photo')?'3px':'-1px'}}>
-              <img src={employeePhoto} style={{width:'100%',height:'100%',objectFit:'contain',display:'block',pointerEvents:'none',
+              <img src={DUMMY_PHOTO} style={{width:'100%',height:'100%',objectFit:'contain',display:'block',pointerEvents:'none',
                 filter:[
                   sd.photoBrightness!==undefined&&sd.photoBrightness!==100?`brightness(${sd.photoBrightness}%)`:'',
                   sd.photoContrast!==undefined&&sd.photoContrast!==100?`contrast(${sd.photoContrast}%)`:'',
@@ -876,14 +825,14 @@ export default function IDBuilder({ records, editingID, onEditSaved, pendingTemp
               })}
             </div>
           )}
-          {sd.showSig&&employeeSig&&(
+          {sd.showSig&&(
             <div onMouseDown={e=>{e.stopPropagation(); if(isActive){handleLayerMouseDown(e,'sig');}else{setActiveSide(which);setSelectedLayer('sig');setSelectedFieldId(null);}}}
               style={{position:'absolute',left:`${sd.sigX}%`,top:`${sd.sigY}%`,width:`${sd.sigW}%`,height:`${sd.sigH}%`,transform:'translate(-50%,-50%)',
                 cursor:isActive?(draggingLayer==='sig'?'grabbing':'grab'):'pointer', zIndex:8,
                 boxShadow:sd.sigShadowBlur&&sd.sigShadowBlur>0?`0 0 ${sd.sigShadowBlur}px ${sd.sigShadowColor||'rgba(0,0,0,0.6)'}`:'none',
                 outline:(isActive&&selectedLayer==='sig')?'2px dashed rgba(139,92,246,0.9)':(sd.sigStrokeWidth&&sd.sigStrokeWidth>0?`${sd.sigStrokeWidth}px solid ${sd.sigStrokeColor||'#000000'}`:'none'),
                 outlineOffset:(isActive&&selectedLayer==='sig')?'3px':'-1px'}}>
-              <img src={employeeSig} style={{width:'100%',height:'100%',objectFit:'contain',display:'block',pointerEvents:'none',
+              <img src={DUMMY_SIG} style={{width:'100%',height:'100%',objectFit:'contain',display:'block',pointerEvents:'none',
                 filter:sd.sigColorize&&sd.sigColorizeColor
                   ? (sd.sigInkDark===false ? hexToColorFilterWhite(sd.sigColorizeColor) : hexToColorFilter(sd.sigColorizeColor))
                   : [
@@ -900,7 +849,7 @@ export default function IDBuilder({ records, editingID, onEditSaved, pendingTemp
             </div>
           )}
 
-          {sd.fields.filter(f=>f.visible).map(field=>{
+          {sd.fields.filter((f:IDField)=>f.visible).map((field:IDField)=>{
             const isSel  = isActive&&selectedFieldId===field.id;
             const isDrag = draggingId===field.id;
             return (
@@ -957,10 +906,10 @@ export default function IDBuilder({ records, editingID, onEditSaved, pendingTemp
             <div style={{background:'linear-gradient(135deg,#ec4899,#be185d)',padding:'8px',borderRadius:'10px',boxShadow:'0 4px 10px rgba(236,72,153,0.3)'}}><LayoutTemplate size={18} color="#fff"/></div>
             <div>
               <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
-                <div style={{fontSize:'15px',fontWeight:800,color:'#0f172a',lineHeight:1.1}}>ID Studio</div>
-                {editingID&&<span style={{background:'#f59e0b22',color:'#d97706',fontSize:'9px',fontWeight:800,padding:'2px 8px',borderRadius:'20px',border:'1px solid #f59e0b44',letterSpacing:'0.5px'}}>✏ EDITING</span>}
+                <div style={{fontSize:'15px',fontWeight:800,color:'#0f172a',lineHeight:1.1}}>Template Editor</div>
+                {editingTemplate&&<span style={{background:'#f59e0b22',color:'#d97706',fontSize:'9px',fontWeight:800,padding:'2px 8px',borderRadius:'20px',border:'1px solid #f59e0b44',letterSpacing:'0.5px'}}>✏ EDITING</span>}
               </div>
-              <div style={{fontSize:'11px',color:'#94a3b8',fontWeight:500}}>{editingID?`Editing: ${editingID.employeeName}`:'Design & Export'}</div>
+              <div style={{fontSize:'11px',color:'#94a3b8',fontWeight:500}}>{editingTemplate?`Editing: ${editingTemplate.name}`:'Design & Export'}</div>
             </div>
           </div>
           {!isMobile && <div style={{width:'1px',height:'28px',background:'#e2e8f0'}}></div>}
@@ -998,8 +947,8 @@ export default function IDBuilder({ records, editingID, onEditSaved, pendingTemp
           <button onClick={()=>downloadSide(activeSide)} style={{...navBtnStyle, background:'#f8fafc'}}>
             <Download size={14} color="#667eea"/> Export {activeSide}
           </button>
-          <button onClick={saveIDToServer} disabled={savingID||(!selectedEmployee&&!editingID)} style={{padding:'8px 16px',borderRadius:'8px',border:'none',background:(selectedEmployee||editingID)?'linear-gradient(135deg,#10b981,#059669)':'#e2e8f0',color:(selectedEmployee||editingID)?'#fff':'#94a3b8',cursor:(selectedEmployee||editingID)?'pointer':'not-allowed',fontSize:'13px',fontWeight:700,display:'flex',alignItems:'center',gap:'8px',boxShadow:(selectedEmployee||editingID)?'0 4px 14px rgba(16,185,129,0.3)':'none'}}>
-            {savingID?<Loader2 size={16} style={{animation:'spin 1s linear infinite'}}/>:<Save size={16}/>} Save ID
+          <button onClick={saveAsTemplate} disabled={savingTemplate||!templateName.trim()} style={{padding:'8px 16px',borderRadius:'8px',border:'none',background:templateName.trim()?'linear-gradient(135deg,#10b981,#059669)':'#e2e8f0',color:templateName.trim()?'#fff':'#94a3b8',cursor:templateName.trim()?'pointer':'not-allowed',fontSize:'13px',fontWeight:700,display:'flex',alignItems:'center',gap:'8px',boxShadow:templateName.trim()?'0 4px 14px rgba(16,185,129,0.3)':'none'}}>
+            {savingTemplate?<Loader2 size={16} style={{animation:'spin 1s linear infinite'}}/>:<Save size={16}/>} Save Template
           </button>
         </div>
       </header>
@@ -1029,33 +978,33 @@ export default function IDBuilder({ records, editingID, onEditSaved, pendingTemp
             <SegmentedControl options={[{label:'Front Card',value:'front'},{label:'Back Card',value:'back'}]} value={activeSide} onChange={(v:any)=>{setActiveSide(v);setSelectedFieldId(null);setSelectedLayer(null);}}/>
           </div>
           <div style={{flex:1,overflowY:'auto'}}>
-            <AccSection id="employee" icon={<Search size={16}/>} title="Employee Link" open={openSection==="employee"} onToggle={toggleSection}>
-              <div style={{position:'relative'}}>
-                <input type="text" defaultValue={empSearch} placeholder="Search employee name..." ref={empSearchRef} onChange={e=>{setEmpSearch(e.target.value);setShowEmpDrop(true);}} onFocus={()=>setShowEmpDrop(true)} onBlur={()=>setTimeout(()=>setShowEmpDrop(false),200)} style={inpStyle}/>
-                {showEmpDrop&&(
-                  <ul style={{position:'absolute',zIndex:999,width:'100%',marginTop:'6px',background:'#fff',border:'1px solid #e2e8f0',borderRadius:'12px',boxShadow:'0 12px 32px rgba(0,0,0,0.1)',maxHeight:'200px',overflowY:'auto',padding:0,listStyle:'none'}}>
-                    {records.filter(r=>r.name.toLowerCase().includes(empSearch.toLowerCase())).map(r=>(
-                      <li key={r.id} onMouseDown={()=>autoFill(r)}
-                        style={{padding:'10px 14px',cursor:'pointer',borderBottom:'1px solid #f8fafc',transition:'background 0.1s'}}
-                        onMouseEnter={e=>(e.currentTarget as HTMLElement).style.background='#f8fafc'} onMouseLeave={e=>(e.currentTarget as HTMLElement).style.background='#fff'}>
-                        <div style={{fontWeight:600,color:'#0f172a',fontSize:'13px'}}>{r.name}</div>
-                        <div style={{color:'#64748b',fontSize:'11px',display:'flex',alignItems:'center',gap:'6px',marginTop:'2px'}}>
-                          <span>{r.position}</span>
-                          {r.empCode ? <span style={{background:'#667eea15',color:'#667eea',borderRadius:'4px',padding:'2px 6px',fontFamily:'monospace',fontWeight:700,fontSize:'10px'}}>{r.empCode}</span> : <span style={{color:'#ef4444',fontSize:'10px'}}>⚠ no code</span>}
-                        </div>
-                      </li>
-                    ))}
-                    {records.filter(r=>r.name.toLowerCase().includes(empSearch.toLowerCase())).length === 0 && <li style={{padding:'14px',textAlign:'center',color:'#94a3b8',fontSize:'12px'}}>No records found</li>}
-                  </ul>
-                )}
-              </div>
-              {selectedEmployee&&(
-                <div style={{padding:'12px',background:'#f8fafc',borderRadius:'10px',border:'1px solid #e2e8f0',display:'flex',alignItems:'center',gap:'12px'}}>
-                  {employeePhoto ? <img src={employeePhoto} style={{width:'36px',height:'36px',borderRadius:'50%',objectFit:'cover',flexShrink:0,border:'2px solid #fff',boxShadow:'0 2px 8px rgba(0,0,0,0.05)'}}/> : <div style={{width:'36px',height:'36px',borderRadius:'50%',background:'#e2e8f0',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'14px',fontWeight:700,color:'#94a3b8'}}>{selectedEmployee.name.charAt(0)}</div>}
-                  <div style={{minWidth:0}}>
-                    <div style={{fontSize:'13px',fontWeight:700,color:'#0f172a',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{selectedEmployee.name}</div>
-                    <div style={{fontSize:'11px',color:'#64748b'}}>{selectedEmployee.position}</div>
+            <AccSection id="employee" icon={<Save size={16}/>} title="Template Info" open={openSection==="employee"} onToggle={toggleSection}>
+              <p style={{margin:'0 0 8px',fontSize:'11px',color:'#64748b'}}>Name your template before saving.</p>
+              <input type="text" value={templateName} onChange={e=>setTemplateName(e.target.value)} placeholder="Template name (e.g. LMVC Corp)" style={{...inpStyle,marginBottom:'8px'}}/>
+              <input type="text" value={templateCompany} onChange={e=>setTemplateCompany(e.target.value)} placeholder="Company (optional)" style={{...inpStyle,marginBottom:'12px'}}/>
+              <button onClick={saveAsTemplate} disabled={savingTemplate||!templateName.trim()}
+                style={{width:'100%',background:templateName.trim()?'linear-gradient(135deg,#10b981,#059669)':'#f1f5f9',color:templateName.trim()?'#fff':'#94a3b8',border:'none',borderRadius:'8px',padding:'10px',cursor:templateName.trim()?'pointer':'not-allowed',fontSize:'13px',fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',gap:'8px'}}>
+                {savingTemplate?<Loader2 size={14} style={{animation:'spin 1s linear infinite'}}/>:<Save size={14}/>} Save Template
+              </button>
+            </AccSection>
+
+            <AccSection id="background" icon={<ImageIcon size={16}/>} title="Background" open={openSection==="background"} onToggle={toggleSection}>
+              <label style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:'10px',border:'1.5px dashed #cbd5e1',borderRadius:'10px',padding:'24px',cursor:'pointer',background:'#f8fafc',transition:'all 0.2s'}}
+                onMouseEnter={e=>{ (e.currentTarget as HTMLElement).style.borderColor='#667eea'; (e.currentTarget as HTMLElement).style.background='#eff6ff'; }} onMouseLeave={e=>{ (e.currentTarget as HTMLElement).style.borderColor='#cbd5e1'; (e.currentTarget as HTMLElement).style.background='#f8fafc'; }}>
+                <div style={{background:'#fff',padding:'10px',borderRadius:'50%',boxShadow:'0 2px 8px rgba(0,0,0,0.05)'}}><Upload size={18} color="#667eea"/></div>
+                <div style={{textAlign:'center'}}>
+                  <span style={{fontSize:'13px',color:'#0f172a',fontWeight:600,display:'block'}}>Upload Image</span>
+                  <span style={{fontSize:'11px',color:'#64748b'}}>JPEG or PNG up to 5MB</span>
+                </div>
+                <input type="file" accept="image/*" onChange={handleBgUpload} style={{display:'none'}}/>
+              </label>
+              {side.background&&(
+                <div style={{marginTop:'8px',display:'flex',alignItems:'center',justifyContent:'space-between',padding:'8px 12px',background:'#ecfdf5',border:'1px solid #a7f3d0',borderRadius:'8px'}}>
+                  <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
+                    <img src={side.background} style={{height:'32px',width:'24px',objectFit:'cover',borderRadius:'4px',border:'1px solid rgba(0,0,0,0.1)'}}/>
+                    <span style={{fontSize:'12px',color:'#059669',fontWeight:600}}>Background Active</span>
                   </div>
+                  <button onClick={()=>updateSideProps({background:null})} style={{fontSize:'11px',color:'#dc2626',background:'#fff',border:'1px solid #fecaca',borderRadius:'6px',padding:'4px 8px',cursor:'pointer',fontWeight:600}}>Remove</button>
                 </div>
               )}
             </AccSection>
@@ -1077,7 +1026,7 @@ export default function IDBuilder({ records, editingID, onEditSaved, pendingTemp
               
               <div style={{fontSize:'11px',fontWeight:700,color:'#94a3b8',textTransform:'uppercase',letterSpacing:'1px',marginBottom:'10px'}}>Text Elements</div>
               <div style={{display:'flex',flexDirection:'column',gap:'6px'}}>
-                {side.fields.map(field=>(
+                {side.fields.map((field:IDField)=>(
                   <button key={field.id} onClick={()=>setSelectedFieldId(field.id)}
                     style={{display:'flex',alignItems:'center',gap:'10px',padding:'10px 12px',borderRadius:'8px',border:selectedFieldId===field.id?'1px solid #ec4899':'1px solid #e2e8f0',background:selectedFieldId===field.id?'#fdf2f8':'#fff',cursor:'pointer',textAlign:'left',transition:'all 0.1s',boxShadow:selectedFieldId===field.id?'0 2px 6px rgba(236,72,153,0.15)':'0 1px 2px rgba(0,0,0,0.02)'}}>
                     <div style={{width:'12px',height:'12px',borderRadius:'4px',background:field.color,border:'1px solid rgba(0,0,0,0.1)',flexShrink:0}}></div>
@@ -1090,15 +1039,13 @@ export default function IDBuilder({ records, editingID, onEditSaved, pendingTemp
               </div>
             </AccSection>
 
-            {/* Direct Browse Templates button - no accordion needed */}
-            <div style={{padding:'12px 16px',borderBottom:'1px solid #f1f5f9'}}>
+            <AccSection id="templates" icon={<LayoutTemplate size={16}/>} title={`Existing Templates (${templates.length})`} open={openSection==="templates"} onToggle={toggleSection}>
+              <p style={{margin:'0 0 10px',fontSize:'11px',color:'#64748b'}}>Load an existing template to edit.</p>
               <button onClick={()=>setShowTemplateModal(true)} disabled={templates.length===0}
-                style={{width:'100%',background:templates.length>0?'linear-gradient(135deg,#667eea,#764ba2)':'#f1f5f9',color:templates.length>0?'#fff':'#94a3b8',border:'none',borderRadius:'12px',padding:'12px',cursor:templates.length>0?'pointer':'not-allowed',fontSize:'13px',fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',gap:'8px',boxShadow:templates.length>0?'0 4px 12px rgba(102,126,234,0.3)':'none',transition:'all 0.2s'}}>
-                <LayoutTemplate size={15}/>
-                {templates.length===0?'No Templates Saved':` Browse Templates (${templates.length})`}
+                style={{width:'100%',background:templates.length>0?'linear-gradient(135deg,#667eea,#764ba2)':'#f1f5f9',color:templates.length>0?'#fff':'#94a3b8',border:'none',borderRadius:'10px',padding:'11px',cursor:templates.length>0?'pointer':'not-allowed',fontSize:'13px',fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',gap:'8px',boxShadow:templates.length>0?'0 4px 12px rgba(102,126,234,0.3)':'none'}}>
+                <LayoutTemplate size={15}/> {templates.length===0?'No Templates Yet':`Browse Templates (${templates.length})`}
               </button>
-              {templates.length===0&&<p style={{margin:'6px 0 0',fontSize:'11px',color:'#94a3b8',textAlign:'center'}}>Design templates in ID Templates section</p>}
-            </div>
+            </AccSection>
           </div>
         </div>
 
@@ -1128,35 +1075,23 @@ export default function IDBuilder({ records, editingID, onEditSaved, pendingTemp
               </div>
             </div>
           ) : (
-            <div style={{flex:1,overflow:'auto',display:'flex',flexDirection:'column',gap:isMobile?'0':'64px',alignItems:'center',justifyContent:isMobile?'flex-start':'center',padding:isMobile?'16px 12px':'60px 40px',position:'relative',zIndex:1}}
+            <div style={{flex:1,overflow:'auto',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'flex-start',padding:isMobile?'16px 12px':'32px 40px',position:'relative',zIndex:1,gap:'16px'}}
                  onMouseDown={(e)=>{if(e.target===e.currentTarget){setSelectedFieldId(null);setSelectedLayer(null);}}}>
-              {/* Mobile: show front/back switcher + single card */}
-              {isMobile ? (
-                <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'12px',width:'100%'}}>
-                  {/* Front/Back switcher */}
-                  <div style={{display:'flex',background:'#e2e8f0',borderRadius:'10px',padding:'3px',gap:'3px',width:'100%',maxWidth:'300px'}}>
-                    {(['front','back'] as const).map(side => (
-                      <button key={side} onClick={()=>{setActiveSide(side);setSelectedFieldId(null);setSelectedLayer(null);}}
-                        style={{flex:1,padding:'8px',borderRadius:'8px',border:'none',cursor:'pointer',fontSize:'13px',fontWeight:700,
-                          background:activeSide===side?'#fff':'transparent',
-                          color:activeSide===side?'#0f172a':'#94a3b8',
-                          boxShadow:activeSide===side?'0 1px 4px rgba(0,0,0,0.1)':'none',
-                          transition:'all 0.15s'}}>
-                        {side==='front'?'▣ Front':'▢ Back'}
-                      </button>
-                    ))}
-                  </div>
-                  {/* Single active card */}
-                  {renderCard(activeSide)}
-                  {/* Hint */}
-                  <p style={{fontSize:'11px',color:'#94a3b8',margin:'4px 0 0',textAlign:'center'}}>Tap fields to edit • Switch tabs for layers & properties</p>
-                </div>
-              ) : (
-                <div style={{display:'flex',flexDirection:'row',gap:'64px',alignItems:'center',justifyContent:'center'}}>
-                  {renderCard('front')}
-                  {renderCard('back')}
-                </div>
-              )}
+              {/* Front/Back tab switcher - always shown in Template Editor */}
+              <div style={{display:'flex',background:'#e2e8f0',borderRadius:'12px',padding:'4px',gap:'4px',flexShrink:0,alignSelf:'center'}}>
+                {(['front','back'] as const).map(side => (
+                  <button key={side} onClick={()=>{setActiveSide(side);setSelectedFieldId(null);setSelectedLayer(null);}}
+                    style={{padding:'9px 28px',borderRadius:'9px',border:'none',cursor:'pointer',fontSize:'13px',fontWeight:700,
+                      background:activeSide===side?'#fff':'transparent',
+                      color:activeSide===side?'#0f172a':'#94a3b8',
+                      boxShadow:activeSide===side?'0 2px 6px rgba(0,0,0,0.1)':'none',
+                      transition:'all 0.15s',whiteSpace:'nowrap'}}>
+                    {side==='front'?'▣ Front Card':'▢ Back Card'}
+                  </button>
+                ))}
+              </div>
+              {renderCard(activeSide)}
+              <p style={{fontSize:'11px',color:'#94a3b8',margin:'0',textAlign:'center'}}>Click elements to select • Drag to reposition</p>
             </div>
           )}
         </div>
@@ -1261,34 +1196,6 @@ export default function IDBuilder({ records, editingID, onEditSaved, pendingTemp
                   </div>
                 ))}
               </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ════════════ CONFIRM LOAD DIALOG ════════════ */}
-      {confirmLoad && (
-        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.55)',zIndex:3000,display:'flex',alignItems:'center',justifyContent:'center',backdropFilter:'blur(6px)',padding:'16px'}}
-          onClick={()=>{setConfirmLoad(null);if(onTemplatLoaded)onTemplatLoaded();}}>
-          <div style={{background:'#fff',borderRadius:'20px',padding:'28px 32px',maxWidth:'420px',width:'100%',boxShadow:'0 24px 64px rgba(0,0,0,0.25)',textAlign:'center'}}
-            onClick={e=>e.stopPropagation()}>
-            <div style={{background:'#f59e0b15',borderRadius:'50%',width:'56px',height:'56px',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px'}}>
-              <LayoutTemplate size={26} color="#d97706"/>
-            </div>
-            <h3 style={{margin:'0 0 8px',fontSize:'18px',fontWeight:800,color:'#0f172a'}}>Load Template?</h3>
-            <p style={{margin:'0 0 8px',fontSize:'13px',color:'#64748b'}}>This will replace your current design with:</p>
-            <p style={{margin:'0 0 4px',fontSize:'15px',fontWeight:700,color:'#0f172a',background:'#f8fafc',borderRadius:'8px',padding:'10px 16px'}}>{confirmLoad.name}</p>
-            {confirmLoad.company&&<p style={{margin:'0 0 16px',fontSize:'12px',color:'#64748b'}}>{confirmLoad.company}</p>}
-            <p style={{margin:'0 0 24px',fontSize:'12px',color:'#94a3b8'}}>Your current unsaved design will be lost.</p>
-            <div style={{display:'flex',gap:'10px'}}>
-              <button onClick={()=>{setConfirmLoad(null);if(onTemplatLoaded)onTemplatLoaded();}}
-                style={{flex:1,background:'#f8fafc',color:'#64748b',border:'1px solid #e2e8f0',borderRadius:'10px',padding:'11px',cursor:'pointer',fontSize:'13px',fontWeight:600}}>
-                Cancel
-              </button>
-              <button onClick={()=>doLoadTemplate(confirmLoad)}
-                style={{flex:1,background:'linear-gradient(135deg,#667eea,#764ba2)',color:'#fff',border:'none',borderRadius:'10px',padding:'11px',cursor:'pointer',fontSize:'13px',fontWeight:700,boxShadow:'0 4px 12px rgba(102,126,234,0.4)'}}>
-                Yes, Load Template
-              </button>
             </div>
           </div>
         </div>
