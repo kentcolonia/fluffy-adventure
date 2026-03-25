@@ -1,11 +1,20 @@
-const express = require('express');
-const fs = require('fs');
-const path = require('path');
-const cors = require('cors');
-const multer = require('multer');
+import dotenv from 'dotenv';
+dotenv.config();
+
+import express from 'express';
+import fs from 'fs';
+import path from 'path';
+import cors from 'cors';
+import multer from 'multer';
+import axios from 'axios';
+import { fileURLToPath } from 'url';
+
+// Recreate __dirname for ES Modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = 5000;
+const PORT = process.env.PORT || 3000;
 
 const DATA_PATH = path.join(__dirname, 'data');
 const IMAGES_PATH = path.join(__dirname, 'data', 'images');
@@ -18,7 +27,7 @@ const TEMPLATES_FILE = path.join(DATA_PATH, 'templates.json');
 });
 
 app.use(cors());
-app.use(express.json({ limit: '50mb' })); // increased for base64 backgrounds stored in templates
+app.use(express.json({ limit: '50mb' })); 
 
 app.use('/images', express.static(IMAGES_PATH));
 
@@ -54,6 +63,62 @@ function deleteImageFile(url) {
   const filePath = path.join(__dirname, url);
   if (fs.existsSync(filePath)) { fs.unlinkSync(filePath); console.log(`[IMAGE DELETED] ${url}`); }
 }
+
+// ==========================================
+// NEW HRIS API INTEGRATION
+// ==========================================
+let hrisToken = null;
+
+async function getHrisToken() {
+  if (hrisToken) return hrisToken; 
+  
+  try {
+    // We need to attach the API key to the login URL as well
+    const loginUrl = new URL(process.env.HRIS_URL);
+    loginUrl.searchParams.append('key', process.env.HRIS_API_KEY);
+
+    const response = await axios.post(loginUrl.toString(), {
+        username: process.env.HRIS_USERNAME,
+        password: process.env.HRIS_PASSWORD
+    });
+    
+    hrisToken = response.data.token;
+    return hrisToken;
+  } catch (error) {
+    console.error("HRIS Login Error:", error.response ? error.response.data : error.message);
+    throw error;
+  }
+}
+
+app.get('/api/employees', async (req, res) => {
+  try {
+      const token = await getHrisToken();
+      const { search, page, limit } = req.query;
+      
+      const url = new URL('https://api.avegabros.org/website/id-employees'); // Make sure this matches your actual endpoint
+      url.searchParams.append('key', process.env.HRIS_API_KEY);
+      url.searchParams.append('order', 'asc');
+      url.searchParams.append('sort', 'id');
+      
+      if (search) url.searchParams.append('search', search);
+      if (page) url.searchParams.append('page', page);
+      if (limit) url.searchParams.append('limit', limit);
+
+      const response = await axios.get(url.toString(), {
+          headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      res.json(response.data);
+  } catch (error) {
+      // If token expired (401), clear it so it fetches a new one next time
+      if (error.response && error.response.status === 401) {
+          hrisToken = null;
+      }
+      console.error("Backend Error:", error.response ? error.response.data : error.message);
+      res.status(500).json({ error: 'Failed to fetch from HRIS' });
+  }
+});
+// ==========================================
 
 // Database
 app.get('/api/database', (req, res) => {
