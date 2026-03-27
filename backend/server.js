@@ -29,7 +29,58 @@ const TEMPLATES_FILE = path.join(DATA_PATH, 'templates.json');
 app.use(cors());
 app.use(express.json({ limit: '50mb' })); 
 
-app.use('/images', express.static(IMAGES_PATH));
+// ── Smart Image Proxy ──
+// Serves locally if cached, otherwise fetches from avegabros.net and caches
+app.get('/images/:filename', async (req, res) => {
+  const filename = req.params.filename;
+
+  res.setHeader('Access-Control-Allow-Origin', '*');
+
+  if (!filename || ['null', 'undefined', ''].includes(filename)) {
+    return res.status(404).send('No image specified');
+  }
+
+  const localPath = path.join(IMAGES_PATH, filename);
+
+  // 1. Serve locally if already cached
+  if (fs.existsSync(localPath)) {
+    const ext = path.extname(filename).toLowerCase();
+    const mime = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif' };
+    if (mime[ext]) res.setHeader('Content-Type', mime[ext]);
+    return res.sendFile(localPath);
+  }
+
+  // 2. Fetch from remote — try signatures folder first, then photos folder
+  // We cannot rely on filename pattern to detect type, so we probe both
+  const BASE = 'https://abas-staging.avegabros.net/';
+  const ext = filename.toLowerCase().split('.').pop();
+  const remotePaths = [
+    `assets/uploads/users/signatures/${filename}`,
+    `assets/uploads/hr/employee_pictures/${filename}`,
+    `assets/uploads/users/signatures/${filename}.png`,
+    `assets/uploads/hr/employee_pictures/${filename}.png`,
+    `assets/uploads/hr/employee_pictures/${filename}.jpg`,
+    `assets/uploads/hr/employee_pictures/${filename}.jpeg`,
+  ];
+
+  for (const remotePath of remotePaths) {
+    const remoteUrl = BASE + remotePath;
+    try {
+      console.log(`[PROXY] Fetching: ${remoteUrl}`);
+      const response = await axios({ url: remoteUrl, method: 'GET', responseType: 'stream', timeout: 8000 });
+      if (response.headers['content-type']) res.setHeader('Content-Type', response.headers['content-type']);
+      const writer = fs.createWriteStream(localPath);
+      response.data.pipe(writer);
+      return new Promise((resolve) => {
+        writer.on('finish', () => { console.log(`[PROXY] Cached: ${filename}`); res.sendFile(localPath); resolve(undefined); });
+        writer.on('error', (err) => { console.error('[PROXY] Write error:', err); res.status(500).send('Storage error'); resolve(undefined); });
+      });
+    } catch { continue; }
+  }
+
+  console.error(`[PROXY 404] Not found: ${filename}`);
+  res.status(404).send('Image not found');
+});
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, IMAGES_PATH),
@@ -190,9 +241,23 @@ app.patch('/api/saved-ids/:id', (req, res) => {
   } catch (e) { res.status(500).json({ error: 'Server error' }); }
 });
 
+// ── Serve built frontend from dist/ ──
+const DIST_PATH = path.join(__dirname, '..', 'dist');
+if (fs.existsSync(DIST_PATH)) {
+  app.use(express.static(DIST_PATH));
+  // Catch-all: return index.html for any non-API route (React Router support)
+  app.get('/{*path}', (req, res) => {
+    res.sendFile(path.join(DIST_PATH, 'index.html'));
+  });
+  console.log(`[STATIC] Serving frontend from: ${DIST_PATH}`);
+} else {
+  console.warn(`[STATIC] No dist/ folder found. Run 'npm run build' first.`);
+}
+
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`-----------------------------------------`);
   console.log(`Server is LIVE on port ${PORT}`);
+  console.log(`Open: http://localhost:${PORT}`);
   console.log(`Images saved to: ${IMAGES_PATH}`);
   console.log(`-----------------------------------------`);
 });

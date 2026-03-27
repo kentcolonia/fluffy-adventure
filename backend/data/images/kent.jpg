@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+	<title>
+		[STG] AVega Business Automation System	</title>
+	<link rel="icon" href="https://abas-staging.avegabros.net/assets/images/favicon.ico" />
+	<!--- LOAD CSS FILES --->
+	<link rel="stylesheet" type="text/css" href="https://abas-staging.avegabros.net/assets/jqueryui/jqueryui.css" />
+	<link rel="stylesheet" type="text/css" href="https://abas-staging.avegabros.net/assets/jquery-signature/jquery.signature.css" />
+	<link rel="stylesheet" type="text/css" href="https://abas-staging.avegabros.net/assets/bootstrap/css/bootstrap.min.css" />
+	<link rel="stylesheet" type="text/css" href="https://abas-staging.avegabros.net/assets/bootstrap-table/src/bootstrap-table.css" />
+	<link rel="stylesheet" type="text/css" href="https://abas-staging.avegabros.net/assets/bootstrap-table/src/bootstrap-table-fixed-columns.min.css" />
+	<link rel="stylesheet" type="text/css" href="https://abas-staging.avegabros.net/assets/bootstrap-progressbar/css/bootstrap-progressbar-3.3.4.min.css" />
+	<link rel="stylesheet" type="text/css" href="https://abas-staging.avegabros.net/assets/gentelella-master/build/css/custom.min.css" />
+	<!-- <link rel="stylesheet" type="text/css" href="https://abas-staging.avegabros.net/assets/gentelella-master/vendors/bootstrap-table-filter/bootstrap-table-filter-control.css" /> -->
+	<link rel="stylesheet" type="text/css" href="https://abas-staging.avegabros.net/assets/gentelella-master/vendors/fullcalendar/dist/fullcalendar.min.css" />
+	<link rel="stylesheet" type="text/css" href="https://abas-staging.avegabros.net/assets/gentelella-master/vendors/fullcalendar/dist/fullcalendar.print.css" media="print" />
+	<link rel="stylesheet" type="text/css" href="https://abas-staging.avegabros.net/assets/gentelella-master/vendors/select2/dist/css/select2.css" />
+	<link rel="stylesheet" type="text/css" href="https://abas-staging.avegabros.net/assets/gentelella-master/vendors/select2/dist/css/select2-bootstrap.css" />
+	<link rel="stylesheet" type="text/css" href="https://abas-staging.avegabros.net/assets/toastr/toastr.css" />
+	<link rel="stylesheet" type="text/css" href="https://abas-staging.avegabros.net/assets/bootstrap-toggle/bootstrap4-toggle.min.css">
+	<!-- <link rel="stylesheet" type="text/css" href="https://abas-staging.avegabros.net/assets/'open-street-map/leaflet.css" integrity="sha512-xwE/Az9zrjBIphAcBb3F6JVqxf46+CDLwfLMHloNu6KEQCAWi6HcDUbeOfBIptF7tcCzusKFjFw2yuvEpDL9wQ==" crossorigin=""/> -->
+	<link rel="stylesheet" href="https://unpkg.com/leaflet@1.6.0/dist/leaflet.css" integrity="sha512-xwE/Az9zrjBIphAcBb3F6JVqxf46+CDLwfLMHloNu6KEQCAWi6HcDUbeOfBIptF7tcCzusKFjFw2yuvEpDL9wQ==" crossorigin="" />
+	<link rel="stylesheet" type="text/css" href="https://abas-staging.avegabros.net/assets/customs/custom-styles.css" />
+	<link rel="stylesheet" type="text/css" href="https://abas-staging.avegabros.net/assets/customs/normalize.css" />
+	<link rel="stylesheet" type="text/css" href="https://abas-staging.avegabros.net/assets/customs/loader.css" />
+	<link rel="stylesheet" type="text/css" href="https://abas-staging.avegabros.net/assets/gantt-chart/dhtmlxgantt.css">
+	<!--- END CSS FILES --->
+	<!--- LOAD JS FILES --->
+	<script type="text/javascript" src="https://abas-staging.avegabros.net/assets/jquery/jquery-1.11.1.min.js"></script>
+	<script type="text/javascript" src="https://abas-staging.avegabros.net/assets/jquery/jQuery.print.js"></script>
+	<script type="text/javascript" src="https://abas-staging.avegabros.net/assets/jquery/jquery.printPage.js"></script>
+	<script type="text/javascript" src="https://abas-staging.avegabros.net/assets/jqueryui/jqueryui.js"></script>
+	<script type="text/javascript" src="https://abas-staging.avegabros.net/assets/jquery-signature/jquery.signature.js"></script>
+	<script type="text/javascript" src="https://abas-staging.avegabros.net/assets/jquery-signature/jquery.ui.touch-punch.js"></script>
+	<script type="text/javascript" src="https://abas-staging.avegabros.net/assets/bootstrap/js/bootstrap.min.js"></script>
+	<script type="text/javascript" src="https://abas-staging.avegabros.net/assets/bootstrap-table/src/bootstrap-table.js"></script>
+	<script type="text/javascript" src="https://abas-staging.avegabros.net/assets/bootstrap-table/src/bootstrap-table-fixed-columns.min.js"></script>
+	<script type="text/javascript" src="https://abas-staging.avegabros.net/assets/bootstrap-table/src/bootstrap-table-mobile.js"></script>
+	<script src="https://cdn.jsdelivr.net/npm/bootstrap-table@1.23.2/dist/extensions/custom-view/bootstrap-table-custom-view.js"></script>
+	<script type="text/javascript" src="https://abas-staging.avegabros.net/assets/bootstrap-toggle/bootstrap4-toggle.min.js"></script>
+	<script type="text/javascript" src="https://abas-staging.avegabros.net/assets/bootbox/js/bootbox.min.js"></script>
+	<script type="text/javascript" src="https://abas-staging.avegabros.net/assets/bootbox/js/bootbox.all.min.js"></script>
+	<script type="text/javascript" src="https://abas-staging.avegabros.net/assets/gentelella-master/vendors/bootstrap-table-export/bootstrap-table-export.js"></script>
+	<script type="text/javascript" src="https://abas-staging.avegabros.net/assets/gentelella-master/vendors/bootstrap-table-export/tableExport.js"></script>
+	<script type="text/javascript" src="https://abas-staging.avegabros.net/assets/gentelella-master/vendors/moment/min/moment.min.js"></script>
+	<script type="text/javascript" src="https://abas-staging.avegabros.net/assets/gentelella-master/vendors/fullcalendar/dist/fullcalendar.min.js"></script>
+	<script type="text/javascript" src="https://abas-staging.avegabros.net/assets/gentelella-master/vendors/select2/dist/js/select2.js"></script>
+	<script type="text/javascript" src="https://abas-staging.avegabros.net/assets/gentelella-master/vendors/jQuery-Smart-Wizard/js/jquery.smartWizard.js"></script>
+	<!-- <script type="text/javascript" src="https://abas-staging.avegabros.net/assets/gentelella-master/vendors/bootstrap-table-filter/bootstrap-table-filter-control.js"></script> -->
+	<script type="text/javascript" src="https://abas-staging.avegabros.net/assets/echarts/echarts.min.js"></script>
+	<script type="text/javascript" src="https://abas-staging.avegabros.net/assets/toastr/toastr.js"></script>
+	<script type="text/javascript" src="https://abas-staging.avegabros.net/assets/darkmode/darkmode-js.min.js"></script>
+	<!-- <script type="text/javascript" src="https://abas-staging.avegabros.net/assets/open-street-map/leaflet.js" integrity="sha512-gZwIG9x3wUXg2hdXF6+rVkLF/0Vi9U8D2Ntg4Ga5I5BZpVkVxlJWbSQtXPSiUTtC0TjtGOmxa1AJPuV0CPthew==" crossorigin=""></script> -->
+	<script src="https://unpkg.com/leaflet@1.6.0/dist/leaflet.js" integrity="sha512-gZwIG9x3wUXg2hdXF6+rVkLF/0Vi9U8D2Ntg4Ga5I5BZpVkVxlJWbSQtXPSiUTtC0TjtGOmxa1AJPuV0CPthew==" crossorigin=""></script>
+	<script src="https://abas-staging.avegabros.net/assets/gantt-chart/dhtmlxgantt.js"></script>
+	<!--- END JS FILES --->
+</head>
+
+<body id="app-body" class="nav nav-md">
+			<div style="background-color: #263243" class="backdrop">
+	<div class="panel-group login-form" style="padding:30px">
+		<div class="panel" style="width:600px;">
+			<div class="panel-heading background" style="padding:20px;">
+				<center>
+					<table>
+						<tr>
+							<td><img src="https://abas-staging.avegabros.net/assets/images/company_logo.png" style="width:100px;height:100%;margin-right:10px"></td>
+							<td>
+								<span><img src="https://abas-staging.avegabros.net/assets/images/logo.png" style="width:40px;height:40px;margin-right:10px" /></span>
+								<span class="mobile-content" style="font-size: 42px; color: white; font-weight: bold;">ABAS</span>
+								<span class="desktop-content" style="font-size: 24px; color: white; font-weight: bold;">AVega Business Automation System</span>
+							</td>
+						</tr>
+					</table>
+				</center>
+			</div>
+			<div class="panel-body">
+				<div class="col-md-5 col-sm-12 col-xs-12">
+					<center><img src="https://abas-staging.avegabros.net/assets/images/image_1.png" style="width:100%;"></center>
+				</div>
+				<div class="col-md-7 col-sm-12 col-xs-12">
+					<div id="login">
+						<form action="https://abas-staging.avegabros.net/home/login" role="form" method="POST" id="2009580575" enctype="multipart/form-data">
+							<input type='hidden' name='ABAS' value='08a8c08815f70a7fef0cef01e1d8ce02' />							<div class="center-contents">
+								<label>Enter your username and password:</label>
+								<div class="form-group">
+									<input type="text" id="username" name="username" placeholder="Username" class="form-control" value="" autofocus required>
+								</div>
+								<div class="form-group">
+									<div class="input-group">
+										<input type="password" id="password" name="password" autocomplete="off" placeholder="Password" class="form-control" value="" required>
+										<span class="input-group-btn">
+											<button id="show_password" class="btn btn-default btn-secondary" type="button">
+												<i class="glyphicon glyphicon-eye-open"></i>
+											</button>
+										</span>
+									</div>
+								</div>
+								<button type="submit" class="btn btn-default btn-block"><i class='glyphicon glyphicon-log-in'></i> Login</button><br>
+								<a href="#" target="_self" class='exclude-pageload pull-right' onclick="javascript:forgotPassword()">Forgot password?</a>
+							</div>
+						</form>
+					</div>
+					<div id="forgot-password" class="hidden">
+						<form class="form-horizontal" role="form" method="POST" id="forgot-password-form" action="https://abas-staging.avegabros.net/home/forgot_password" enctype='multipart/form-data'>
+							<input type='hidden' name='ABAS' value='08a8c08815f70a7fef0cef01e1d8ce02' />							<div class="center-contents">
+								<label>If you have forgotten your password, provide your:</label>
+								<div class="form-group">
+									<input type="text" id="uname" name="uname" autocomplete="off" placeholder="Username" class="form-control" value="" required>
+								</div>
+								<div class="form-group">
+									<input type="email" id="email" name="email" autocomplete="off" placeholder="Email" class="form-control" value="" required>
+								</div>
+								<div class="form-group">
+									<div class="x_panel">
+										<span id="captcha_container"></span>
+										<a href="#" target="_self" class="btn btn-lg pull-right btn-default exclude-pageload" id="change_captcha" title="Cannot read? change CAPTCHA"><span class="glyphicon glyphicon-refresh"></span></a>
+									</div>
+									<input type="text" id="captcha" name="captcha" autocomplete="off" placeholder="Enter the text you see from the above image" class="form-control text-center" value="" required>
+								</div>
+							</div>
+							<button type="submit" class="btn btn-default btn-block"><i class='glyphicon glyphicon-log-in'></i> Submit</button><br>
+							<a href="https://abas-staging.avegabros.net/" target="_self" class='exclude-pageload pull-right'>Go back</a>
+						</form>
+					</div>
+				</div>
+			</div>
+			<div class='panel-footer'>
+				<span style="text-align:center;font-size:9px">
+					<center>©2026 All Rights Reserved. ABAS V.2.51.4
+ is licensed under AVega Bros Integrated Shipping Corp.</center>
+				</span>
+			</div>
+		</div>
+	</div>
+</div>
+<script type="text/javascript">
+	$("#show_password").click(function() {
+		var pass = $("#password");
+		if (pass.attr('type') == "password") {
+			pass.attr('type', 'text');
+		} else {
+			pass.attr('type', 'password');
+		}
+	});
+
+	function forgotPassword() {
+		$("#login").addClass('hidden');
+		$("#forgot-password").removeClass('hidden');
+		$("#uname").focus();
+		show_captcha();
+	}
+	$('#change_captcha').click(function() {
+		show_captcha();
+	});
+
+	function show_captcha() {
+		$.ajax({
+			type: "GET",
+			url: "https://abas-staging.avegabros.net/home/generate_captcha",
+			success: function(data) {
+				var captcha = $.parseJSON(data);
+				$('#captcha_container').empty().append(captcha.image);
+			}
+		});
+	}
+</script>		<!-- LOAD CUSTOM SCRIPTS -->
+	<script type="text/javascript" src="https://abas-staging.avegabros.net/assets/gentelella-master/build/js/custom.min.js"></script>
+	<script type="text/javascript" src="https://abas-staging.avegabros.net/assets/customs/custom-functions.js"></script>
+	<script type="text/javascript">
+		$(document).ready(function() {
+			//this fixes some select2 searchbox not working
+			$.fn.modal.Constructor.prototype.enforceFocus = function() {};
+			$('select').select2({
+				theme: (localStorage.getItem("darkmode") === "true") ? "dark" : "bootstrap",
+				width: '100%',
+				dropdownAutoWidth: true
+			});
+
+			//fixes the issue with the jqueryUI overlapping the styles of bootstrap progress-bar
+			document.querySelectorAll('.progress-bar').forEach(function(element) {
+				element.classList.remove('ui-progressbar', 'ui-widget', 'ui-widget-content', 'ui-corner-all');
+			});
+
+			// for showing toast notifications
+			toastr.options = {
+				"preventDuplicates": true,
+				"progressBar": true,
+				"newestOnTop": true,
+				"positionClass": "toast-bottom-right",
+				"timeOut": 5000,
+			}
+
+			//for setting the darkmode
+			if (localStorage.getItem('darkmode') === null) {
+				// If it doesn't exist, set it to a default value (e.g., 'false' for light mode)
+				localStorage.setItem('darkmode', 'false');
+			}
+			const darkmode = new Darkmode();
+			if (darkmode.isActivated()) {
+				$('#darkmode-toggle').bootstrapToggle('on')
+			} else {
+				$('#darkmode-toggle').bootstrapToggle('off')
+			}
+			$('#darkmode-toggle').on('change', function() {
+				darkmode.toggle();
+				$('select').select2({
+					theme: (localStorage.getItem("darkmode") === "true") ? "dark" : "bootstrap",
+					width: '100%',
+					dropdownAutoWidth: true
+				});
+			});
+
+			//quick access CTRL+K combi
+			$(document).keydown(function(event) {
+				if (event.ctrlKey && event.keyCode === 75) {
+					event.preventDefault();
+					$('#quick-access').focus().select();
+					return false;
+				}
+			});
+			$("#quick-access").autocomplete({
+				source: function(request, response) {
+					$.ajax({
+						url: "https://abas-staging.avegabros.net/features/quick_access",
+						type: 'GET',
+						dataType: "json",
+						data: {
+							search: request.term
+						},
+						success: function(data) {
+							response(data);
+						}
+					});
+				},
+				minLength: 2,
+				search: function(event, ui) {
+					toastr['info']('Loading, please wait...');
+				},
+				select: function(event, ui) {
+					$("#quick-access").val(ui.item.label);
+					showLoader();
+					window.location.replace('https://abas-staging.avegabros.net/' + ui.item.url);
+					return false;
+				}
+			});
+
+			//for bookmarkiing
+			$('#bookmark-button').click(function() {
+				bootbox.prompt({
+					title: "Please add a short title for this bookmark:",
+					inputType: 'text',
+					size: 'small',
+					buttons: {
+						cancel: {
+							label: 'Discard',
+							className: 'btn-dark'
+						},
+						confirm: {
+							label: 'Proceed',
+							className: 'btn-success'
+						}
+					},
+					callback: function(result) {
+						if (result == null || result == "") {} else {
+							$.ajax({
+								type: "POST",
+								url: "https://abas-staging.avegabros.net/features/bookmarks/add",
+								data: {
+									title: result,
+									url: "https://abas-staging.avegabros.net/home",
+								},
+								success: function(data) {
+									toastr['success']('Bookmark was added.', 'System Notification');
+								},
+								error: function(xhr, status, error) {
+									toastr['warning']('Bookmark failed!', 'System Notification');
+								}
+							});
+							//reload the bookmark list
+							$.ajax({
+								type: "GET",
+								url: "https://abas-staging.avegabros.net/features/bookmarks/list",
+								success: function(response) {
+									$('#bookmark-container').html(response);
+								},
+								error: function(xhr, status, error) {
+									toastr['warning']('Please reload the page!', 'System Notification');
+								}
+							});
+						}
+					}
+				});
+			});
+
+			// for scroll to top
+			$(window).scroll(function() {
+				if ($(this).scrollTop() > 100) {
+					$('#back-to-top').fadeIn();
+				} else {
+					$('#back-to-top').fadeOut();
+				}
+			});
+			$('#back-to-top').click(function() {
+				$('html, body').animate({
+					scrollTop: 0
+				}, 500);
+				return false;
+			});
+
+			//for loading the spinner
+			$('a').not("[href='javascript:void(0)']")
+				.not("[data-toggle='modal']")
+				.not("[data-toggle='collapse']")
+				.not("[target='_blank']")
+				.not(".nav > li > a:not([href])")
+				.not(".nav-link")
+				.not(".nav-tabs > li > a")
+				.not(".view_canvasses-btn")
+				.not(".request-item-approve-btn")
+				.not(".request-item-cancel-btn")
+				.not("[href='#']")
+				.not(".exclude-pageload").click(function() {
+					/* $('body').addClass('is-loading');*/
+					showLoader();
+				});
+			$(".force-pageload").click(function() {
+				/* $('body').addClass('is-loading');*/
+				showLoader();
+			});
+			$(".force-pageload").click(function() {
+				/* $('body').addClass('is-loading');*/
+				showLoader();
+			});
+
+			//custom functions
+			showClock();
+			showGreetings();
+			var hide_notifications = '0';
+			if (hide_notifications == 0) {
+				showToastr('[]');
+				showToastr('[]');
+			}
+			resetModal();
+		});
+		$(window).on('beforeunload', function() {
+			// Trigger the overlay on page unload
+			showLoader();
+			var hide_notifications = '0';
+			if (hide_notifications == 0) {
+				showToastr('[]');
+				showToastr('[]');
+			}
+		});
+		// Additionally, you might want to handle the case when the user uses the browser's back button
+		$(window).on('pageshow', function(event) {
+			if (event.originalEvent.persisted) {
+				// Trigger the overlay on pageshow (e.g., when user navigates back)
+				showLoader();
+				var hide_notifications = '0';
+				if (hide_notifications == 0) {
+					showToastr('[]');
+					showToastr('[]');
+				}
+			}
+		});
+
+		// for showing the dev page load time
+		toastr["info"]("This page took 0.0002 seconds and uses 3.58MB to load.","Benchmark")	</script>
+	<!-- END CUSTOM SCRIPTS -->
+</body>
+
+</html>
