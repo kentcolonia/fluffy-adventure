@@ -8,6 +8,7 @@ import cors from 'cors';
 import multer from 'multer';
 import axios from 'axios';
 import { fileURLToPath } from 'url';
+import crypto from 'crypto';
 
 // Recreate __dirname for ES Modules
 const __filename = fileURLToPath(import.meta.url);
@@ -52,7 +53,7 @@ app.get('/images/:filename', async (req, res) => {
 
   // 2. Fetch from remote — try signatures folder first, then photos folder
   // We cannot rely on filename pattern to detect type, so we probe both
-  const BASE = 'https://abas-staging.avegabros.net/';
+  const BASE = 'https://avegabros.net/';
   const ext = filename.toLowerCase().split('.').pop();
   const remotePaths = [
     `assets/uploads/users/signatures/${filename}`,
@@ -198,6 +199,72 @@ app.delete('/api/records/:id', (req, res) => {
   fs.writeFileSync(RECORDS_FILE, JSON.stringify(records.filter(r => String(r.id) !== req.params.id), null, 2));
   res.sendStatus(200);
 });
+
+
+// ==========================================
+// AUTH SYSTEM
+// ==========================================
+const ACCOUNTS_FILE = path.join(DATA_PATH, 'accounts.json');
+
+
+function hashPassword(password) {
+  return crypto.createHash('sha256').update(password).digest('hex');
+}
+
+function getAccounts() {
+  if (!fs.existsSync(ACCOUNTS_FILE)) {
+    // Default admin account
+    const defaults = [{ id: '1', username: 'admin', password: hashPassword('admin123'), role: 'admin' }];
+    fs.writeFileSync(ACCOUNTS_FILE, JSON.stringify(defaults, null, 2));
+    return defaults;
+  }
+  return JSON.parse(fs.readFileSync(ACCOUNTS_FILE, 'utf8'));
+}
+
+app.post('/api/auth/login', (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) return res.status(400).json({ message: 'Username and password required' });
+  const accounts = getAccounts();
+  const user = accounts.find(u => u.username === username && u.password === hashPassword(password));
+  if (!user) return res.status(401).json({ message: 'Invalid username or password' });
+  const token = crypto.randomBytes(32).toString('hex');
+  res.json({ token, username: user.username, role: user.role });
+});
+
+app.get('/api/auth/users', (req, res) => {
+  const accounts = getAccounts();
+  res.json(accounts.map(({ password: _, ...u }) => u));
+});
+
+app.post('/api/auth/users', (req, res) => {
+  const { username, password, role } = req.body;
+  if (!username || !password) return res.status(400).json({ message: 'Username and password required' });
+  const accounts = getAccounts();
+  if (accounts.find(u => u.username === username)) return res.status(409).json({ message: 'Username already exists' });
+  const newUser = { id: Date.now().toString(), username, password: hashPassword(password), role: role || 'user' };
+  accounts.push(newUser);
+  fs.writeFileSync(ACCOUNTS_FILE, JSON.stringify(accounts, null, 2));
+  const { password: _, ...safe } = newUser;
+  res.json(safe);
+});
+
+app.delete('/api/auth/users/:id', (req, res) => {
+  const accounts = getAccounts().filter(u => u.id !== req.params.id);
+  fs.writeFileSync(ACCOUNTS_FILE, JSON.stringify(accounts, null, 2));
+  res.sendStatus(200);
+});
+
+app.patch('/api/auth/users/:id/password', (req, res) => {
+  const { password } = req.body;
+  if (!password) return res.status(400).json({ message: 'Password required' });
+  const accounts = getAccounts();
+  const idx = accounts.findIndex(u => u.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ message: 'User not found' });
+  accounts[idx].password = hashPassword(password);
+  fs.writeFileSync(ACCOUNTS_FILE, JSON.stringify(accounts, null, 2));
+  res.sendStatus(200);
+});
+// ==========================================
 
 // Templates — saves full front/back layout including background images as base64
 app.get('/api/templates', (req, res) => {

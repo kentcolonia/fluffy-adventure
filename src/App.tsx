@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Users, Plus, FileSpreadsheet, CreditCard, Download, Menu, Shield, Printer, X, Home } from 'lucide-react';
 import { API_URL } from './types';

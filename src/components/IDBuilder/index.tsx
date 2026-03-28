@@ -13,7 +13,9 @@ const defaultFrontFields: IDField[] = [
 ];
 
 const defaultBackFields: IDField[] = [
-  { id: 'emergency_num', label: 'Emergency Number', value: '09123456789', x: 50, y: 14, fontSize: 16, color: '#333333', bold: true, italic: false, align: 'center', visible: true },
+  { id: 'emergency_person', label: 'Emergency Contact Person', value: 'Contact Person Name', x: 50, y: 14, fontSize: 12, color: '#000000', bold: false, italic: false, align: 'center', visible: true },
+  { id: 'emergency_num',    label: 'Emergency Number',         value: '09123456789',         x: 50, y: 22, fontSize: 12, color: '#000000', bold: true,  italic: false, align: 'center', visible: true },
+  
 ];
 
 // ── SHARED STYLES & COMPONENTS ──
@@ -278,13 +280,13 @@ const FieldEditor = React.memo(({ field, onUpdate }: FieldEditorProps) => {
 
 // ── MAIN ID BUILDER COMPONENT ──
 interface IDBuilderProps {
-  records: EmployeeRecord[];
+  records?: EmployeeRecord[]; // kept for backwards compat — employee search now uses API
   editingID?: { id: string; employeeName: string; position: string; front: IDSide; back: IDSide } | null;
   onEditSaved?: (id: string) => void;
   pendingTemplate?: IDTemplate | null;
   onTemplatLoaded?: () => void;
 }
-export default function IDBuilder({ records, editingID, onEditSaved, pendingTemplate, onTemplatLoaded }: IDBuilderProps) {
+export default function IDBuilder({ editingID, onEditSaved, pendingTemplate, onTemplatLoaded }: IDBuilderProps) {
   const CARD_W = 214, CARD_H = 340; // CR80 portrait: 54mm x 85.6mm
 
   // ── core state ──
@@ -319,11 +321,42 @@ export default function IDBuilder({ records, editingID, onEditSaved, pendingTemp
   const cardFrontRef = React.useRef<HTMLDivElement>(null);
   const cardBackRef  = React.useRef<HTMLDivElement>(null);
 
-  // ── employee ──
+  // ── employee (API-driven) ──
   const [selectedEmployee, setSelectedEmployee] = React.useState<EmployeeRecord|null>(null);
   const [empSearch,        setEmpSearch]         = React.useState('');
   const empSearchRef = React.useRef<HTMLInputElement>(null);
   const [showEmpDrop,      setShowEmpDrop]       = React.useState(false);
+  const [empResults,       setEmpResults]        = React.useState<EmployeeRecord[]>([]);
+  const [empLoading,       setEmpLoading]        = React.useState(false);
+  const empDebounceRef = React.useRef<ReturnType<typeof setTimeout>|null>(null);
+
+  const fetchEmployees = React.useCallback((query: string) => {
+    if (empDebounceRef.current) clearTimeout(empDebounceRef.current);
+    empDebounceRef.current = setTimeout(async () => {
+      setEmpLoading(true);
+      try {
+        const params = new URLSearchParams({ order: 'asc', sort: 'id' });
+        if (query.trim()) params.append('search', query.trim());
+        const res = await fetch(`${API_URL}/employees?${params}`);
+        if (!res.ok) throw new Error('fetch failed');
+        const data = await res.json();
+        const list: EmployeeRecord[] = (Array.isArray(data) ? data : (data.data ?? [])).map((e: any) => ({
+          id: Number(e.id),
+          name: e.full_name ?? '',
+          position: e.position ?? '',
+          empCode: e.employee_id ?? '',
+          company: e.company ?? '',
+          indication: e.indication ?? '',
+          photo: e.picture || null,
+          signature: e.signature || null,
+          emergency_contact_num: e.emergency_contact_num || '',
+          emergency_contact_person: e.emergency_contact_person || '',
+        } as any));
+        setEmpResults(list);
+      } catch { setEmpResults([]); }
+      finally { setEmpLoading(false); }
+    }, 350);
+  }, []);
 
   // ── card data ──
   const [front, setFront] = React.useState<IDSide>(
@@ -454,21 +487,28 @@ export default function IDBuilder({ records, editingID, onEditSaved, pendingTemp
   const autoFill = (emp:EmployeeRecord) => {
     setSelectedEmployee(emp); setEmpSearch(emp.name); setShowEmpDrop(false);
     if(empSearchRef.current) empSearchRef.current.value = emp.name;
+    // Fill front card fields
     setFront(p=>({...p, fields:p.fields.map(f=>{
-      if(f.id==='fullname') return {...f, value:emp.name};
+      if(f.id==='fullname') return {...f, value: emp.name};
       if(f.id==='nickname') {
-        // Name format: "LASTNAME,FIRSTNAME MIDDLENAME" or "LASTNAME, FIRSTNAME"
         const commaIdx = emp.name.indexOf(',');
         let firstName = emp.name;
         if (commaIdx !== -1) {
-          // Get everything after the comma, trim, take first word
           const afterComma = emp.name.slice(commaIdx + 1).trim();
           firstName = afterComma.split(' ')[0] || afterComma;
         }
         return {...f, value: firstName};
       }
-      if(f.id==='position') return {...f, value:emp.position};
-      if(f.id==='idnum' && emp.empCode) return {...f, value:emp.empCode};
+      if(f.id==='position') return {...f, value: emp.position || ''};
+      if(f.id==='idnum' && emp.empCode) return {...f, value: emp.empCode};
+      return f;
+    })}));
+    // Fill back card fields from API data
+    const emergencyNum    = (emp as any).emergency_contact_num    || '';
+    const emergencyPerson = (emp as any).emergency_contact_person || '';
+    setBack(p=>({...p, fields:p.fields.map(f=>{
+      if(f.id==='emergency_num'    && emergencyNum)    return {...f, value: emergencyNum};
+      if(f.id==='emergency_person' && emergencyPerson) return {...f, value: emergencyPerson};
       return f;
     })}));
   };
@@ -823,7 +863,22 @@ export default function IDBuilder({ records, editingID, onEditSaved, pendingTemp
     setTemplates(updated);
   };
   const editTemplateInEditor = (t:IDTemplate)=>{ setShowTemplateModal(false); showMsg('success',`Go to ID Templates to edit "${t.name}"`); };
-  const doLoadTemplate = (t:IDTemplate)=>{ setFront({...t.front}); setBack({...t.back}); pushHistory(t.front,t.back); showMsg("success",`Loaded "${t.name}"`); setConfirmLoad(null); if(onTemplatLoaded) onTemplatLoaded(); };
+  const doLoadTemplate = (t:IDTemplate)=>{
+    // Merge template fields with defaults — ensures new default fields (e.g. emergency_person)
+    // are always present even if the saved template predates them
+    const mergeFields = (templateFields: IDField[], defaults: IDField[]): IDField[] => {
+      const ids = new Set(templateFields.map(f => f.id));
+      const missing = defaults.filter(f => !ids.has(f.id));
+      return [...templateFields, ...missing];
+    };
+    const mergedBack  = { ...t.back,  fields: mergeFields(t.back.fields,  defaultBackFields)  };
+    const mergedFront = { ...t.front, fields: mergeFields(t.front.fields, defaultFrontFields) };
+    setFront(mergedFront); setBack(mergedBack);
+    pushHistory(mergedFront, mergedBack);
+    showMsg("success",`Loaded "${t.name}"`);
+    setConfirmLoad(null);
+    if(onTemplatLoaded) onTemplatLoaded();
+  };
 
   const renderCard = (which:'front'|'back') => {
     const sd     = which==='front'?front:back;
@@ -1031,10 +1086,25 @@ export default function IDBuilder({ records, editingID, onEditSaved, pendingTemp
           <div style={{flex:1,overflowY:'auto'}}>
             <AccSection id="employee" icon={<Search size={16}/>} title="Employee Link" open={openSection==="employee"} onToggle={toggleSection}>
               <div style={{position:'relative'}}>
-                <input type="text" defaultValue={empSearch} placeholder="Search employee name..." ref={empSearchRef} onChange={e=>{setEmpSearch(e.target.value);setShowEmpDrop(true);}} onFocus={()=>setShowEmpDrop(true)} onBlur={()=>setTimeout(()=>setShowEmpDrop(false),200)} style={inpStyle}/>
+                <div style={{position:'relative'}}>
+                  <input type="text" value={empSearch} placeholder="Search employee name..." ref={empSearchRef}
+                    onChange={e=>{ setEmpSearch(e.target.value); setShowEmpDrop(true); fetchEmployees(e.target.value); }}
+                    onFocus={()=>{ setShowEmpDrop(true); fetchEmployees(empSearch); }}
+                    onBlur={()=>setTimeout(()=>setShowEmpDrop(false),200)}
+                    style={inpStyle}/>
+                  {empLoading && <Loader2 size={14} style={{position:'absolute',right:'10px',top:'50%',transform:'translateY(-50%)',color:'#94a3b8',animation:'spin 1s linear infinite'}}/>}
+                </div>
                 {showEmpDrop&&(
                   <ul style={{position:'absolute',zIndex:999,width:'100%',marginTop:'6px',background:'#fff',border:'1px solid #e2e8f0',borderRadius:'12px',boxShadow:'0 12px 32px rgba(0,0,0,0.1)',maxHeight:'200px',overflowY:'auto',padding:0,listStyle:'none'}}>
-                    {records.filter(r=>r.name.toLowerCase().includes(empSearch.toLowerCase())).map(r=>(
+                    {empLoading && (
+                      <li style={{padding:'14px',textAlign:'center',color:'#94a3b8',fontSize:'12px',display:'flex',alignItems:'center',justifyContent:'center',gap:'8px'}}>
+                        <Loader2 size={14} style={{animation:'spin 1s linear infinite'}}/> Searching...
+                      </li>
+                    )}
+                    {!empLoading && empResults.length===0 && empSearch.trim().length>0 && (
+                      <li style={{padding:'14px',textAlign:'center',color:'#94a3b8',fontSize:'12px'}}>No employees found for "{empSearch}"</li>
+                    )}
+                    {empResults.map(r=>(
                       <li key={r.id} onMouseDown={()=>autoFill(r)}
                         style={{padding:'10px 14px',cursor:'pointer',borderBottom:'1px solid #f8fafc',transition:'background 0.1s'}}
                         onMouseEnter={e=>(e.currentTarget as HTMLElement).style.background='#f8fafc'} onMouseLeave={e=>(e.currentTarget as HTMLElement).style.background='#fff'}>
@@ -1042,10 +1112,10 @@ export default function IDBuilder({ records, editingID, onEditSaved, pendingTemp
                         <div style={{color:'#64748b',fontSize:'11px',display:'flex',alignItems:'center',gap:'6px',marginTop:'2px'}}>
                           <span>{r.position}</span>
                           {r.empCode ? <span style={{background:'#667eea15',color:'#667eea',borderRadius:'4px',padding:'2px 6px',fontFamily:'monospace',fontWeight:700,fontSize:'10px'}}>{r.empCode}</span> : <span style={{color:'#ef4444',fontSize:'10px'}}>⚠ no code</span>}
+                          {r.company && <span style={{background:'#f1f5f9',color:'#64748b',borderRadius:'4px',padding:'2px 6px',fontSize:'10px'}}>{r.company}</span>}
                         </div>
                       </li>
                     ))}
-                    {records.filter(r=>r.name.toLowerCase().includes(empSearch.toLowerCase())).length === 0 && <li style={{padding:'14px',textAlign:'center',color:'#94a3b8',fontSize:'12px'}}>No records found</li>}
                   </ul>
                 )}
               </div>

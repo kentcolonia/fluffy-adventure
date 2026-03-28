@@ -1,269 +1,165 @@
-import { useState, useEffect } from 'react';
-import { Users, Search, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Users, Search, Loader2, AlertCircle, RefreshCw, Phone, UserCheck } from 'lucide-react';
+import { API_URL } from '../types';
 
-// ==========================================
-// TYPESCRIPT INTERFACES
-// ==========================================
 export interface ApiEmployee {
-  id?: string;
-  employee_id?: string;
-  name?: string;
-  full_name?: string;
-  fullname?: string;
-  department?: string;
-  status?: string;
+  id: string;
+  employee_id: string;
+  full_name: string;
+  emergency_contact_num?: string;
+  emergency_contact_person?: string;
+  signature?: string;
+  picture?: string;
   position?: string;
-  [key: string]: any; // Catch-all for other potential API fields
+  department?: string;
+  company?: string;
+  status?: string;
+  [key: string]: any;
 }
 
 interface LoadDatabaseProps {
-  employeeDatabase?: any; // Typed as 'any' to avoid mismatch with src/types.ts
-  setEmployeeDatabase?: any; // Typed as 'any' to avoid strict Dispatch type mismatch
+  employeeDatabase?: any;
+  setEmployeeDatabase?: any;
 }
 
-// ==========================================
-// MAIN COMPONENT (Directly loads Dashboard)
-// ==========================================
+const LIMIT = 10000;
+
 export default function LoadDatabase({ setEmployeeDatabase }: LoadDatabaseProps) {
-  const [employees, setEmployees] = useState<ApiEmployee[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [page, setPage] = useState(0);
+  const [employees, setEmployees]     = useState<ApiEmployee[]>([]);
+  const [isLoading, setIsLoading]     = useState(true);
+  const [error, setError]             = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [page, setPage]               = useState(0);
+  const [totalCount, setTotalCount]   = useState(0);
 
-  // Increased limit to 2500 to fetch the entire database at once (replacing the old Excel behavior)
-  const LIMIT = 2500;
-
-  const fetchEmployees = async () => {
+  const fetchEmployees = useCallback(async (query: string, pg: number) => {
     setIsLoading(true);
-    setError('');
-
+    setError("");
     try {
-      // ---------------------------------------------------------
-      // Pointing directly to YOUR local Node.js backend server
-      // Changed to port 3000 to match your backend .env file
-      // ---------------------------------------------------------
-      const url = new URL('http://localhost:3000/api/employees');
-      if (searchQuery) url.searchParams.append('search', searchQuery);
-      url.searchParams.append('page', page.toString());
-      url.searchParams.append('limit', LIMIT.toString());
-
-      const response = await fetch(url.toString(), {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch employee data from backend server.');
-      }
-
-      const data = await response.json();
-      
-      // Assuming your backend returns the raw API array or a data object
-      const rawData = data.data || data || [];
-      
-      // Map the data so it matches both the table UI and the parent App.tsx needs
-      const fetchedData = rawData.map((emp: any) => ({
-        ...emp,
-        // Ensure standard properties exist for the rest of your app's logic
-        id: emp.employee_id || emp.id, 
-        name: emp.full_name || emp.fullname || emp.name || 'Unknown',
-      }));
-
-      setEmployees(fetchedData);
-      
-      // Pass the data up to your parent component (App.tsx)
-      if (setEmployeeDatabase) {
-        setEmployeeDatabase(fetchedData);
-      }
-      
+      const params = new URLSearchParams({ order: "asc", sort: "id", limit: LIMIT.toString(), page: pg.toString() });
+      if (query.trim()) params.append("search", query.trim());
+      const res = await fetch(`${API_URL}/employees?${params}`);
+      if (!res.ok) throw new Error(`Server responded with ${res.status}`);
+      const data = await res.json();
+      const rawList: ApiEmployee[] = Array.isArray(data) ? data : (data.data ?? []);
+      setEmployees(rawList);
+      setTotalCount(data.total ?? rawList.length);
+      if (setEmployeeDatabase) setEmployeeDatabase(rawList);
     } catch (err) {
-      console.error('Fetch Error:', err);
-      const errorMessage = err instanceof Error ? err.message : 'An error occurred while fetching data.';
-      setError(errorMessage);
-      
-      // MOCK DATA FOR DEMONSTRATION IF BACKEND FAILS
-      const mockData: ApiEmployee[] = [
-        { id: 'ABMCI-001', employee_id: 'ABMCI-001', full_name: 'MAKIG-ANGAY, NIKKI', name: 'MAKIG-ANGAY, NIKKI', department: 'IT', status: 'Active', position: 'Developer' },
-        { id: 'ABMCI-002', employee_id: 'ABMCI-002', full_name: 'DOE, JANE', name: 'DOE, JANE', department: 'HR', status: 'Active', position: 'Manager' },
-      ];
-      
-      setEmployees(mockData);
-      if (setEmployeeDatabase) {
-        setEmployeeDatabase(mockData);
-      }
+      setError(err instanceof Error ? err.message : "Unknown error");
+      setEmployees([]);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [setEmployeeDatabase]);
 
-  // Fetch data when component mounts or when search/page changes
   useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      fetchEmployees();
-    }, 500);
-    return () => clearTimeout(timeoutId);
-  }, [searchQuery, page]);
+    const t = setTimeout(() => fetchEmployees(searchQuery, page), 400);
+    return () => clearTimeout(t);
+  }, [searchQuery, page, fetchEmployees]);
+
+  const card: React.CSSProperties = { background: "#fff", borderRadius: "16px", border: "1px solid #e2e8f0", boxShadow: "0 1px 4px rgba(0,0,0,0.04)", overflow: "hidden" };
+  const th: React.CSSProperties   = { padding: "10px 16px", fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.8px", textAlign: "left", background: "#f8fafc", borderBottom: "1px solid #e2e8f0", whiteSpace: "nowrap" };
+  const td: React.CSSProperties   = { padding: "12px 16px", fontSize: "13px", color: "#0f172a", borderBottom: "1px solid #f1f5f9", verticalAlign: "middle" };
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      {/* Navigation Bar */}
-      <nav className="bg-white shadow-sm border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex items-center">
-              <div className="flex-shrink-0 flex items-center">
-                <div className="bg-blue-600 p-2 rounded-lg text-white mr-3">
-                  <Users size={24} />
-                </div>
-                <span className="font-bold text-xl text-slate-800">HRIS Portal</span>
-              </div>
-            </div>
-            <div className="flex items-center">
-              <span className="text-sm text-slate-500 mr-4">Connected via Local Backend</span>
-              <button
-                onClick={fetchEmployees}
-                className="inline-flex items-center px-3 py-2 border border-slate-300 shadow-sm text-sm leading-4 font-medium rounded-md text-slate-700 bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
-              >
-                <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-                Refresh Data
+    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "12px" }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: "20px", fontWeight: 800, color: "#0f172a" }}>Employee Directory</h2>
+          <p style={{ margin: "2px 0 0", fontSize: "13px", color: "#94a3b8" }}>
+            Live data from HRIS API{totalCount > 0 && ` · ${totalCount.toLocaleString()} employees`}
+          </p>
+        </div>
+        <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+          <div style={{ position: "relative" }}>
+            <Search size={14} style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", color: "#94a3b8", pointerEvents: "none" }} />
+            <input type="text" placeholder="Search employees..." value={searchQuery}
+              onChange={e => { setSearchQuery(e.target.value); setPage(0); }}
+              style={{ paddingLeft: "32px", paddingRight: "12px", paddingTop: "8px", paddingBottom: "8px", border: "1px solid #e2e8f0", borderRadius: "10px", fontSize: "13px", outline: "none", width: "220px", color: "#0f172a", background: "#fff" }} />
+          </div>
+          <button onClick={() => fetchEmployees(searchQuery, page)}
+            style={{ display: "flex", alignItems: "center", gap: "6px", padding: "8px 14px", border: "1px solid #e2e8f0", borderRadius: "10px", background: "#fff", fontSize: "13px", fontWeight: 600, color: "#475569", cursor: "pointer" }}>
+            <RefreshCw size={14} style={isLoading ? { animation: "spin 1s linear infinite" } : undefined} /> Refresh
+          </button>
+        </div>
+      </div>
+
+      {error && (
+        <div style={{ display: "flex", alignItems: "flex-start", gap: "10px", padding: "14px 16px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "12px" }}>
+          <AlertCircle size={16} color="#dc2626" style={{ flexShrink: 0, marginTop: "2px" }} />
+          <div>
+            <div style={{ fontSize: "13px", fontWeight: 700, color: "#dc2626" }}>Failed to load employees</div>
+            <div style={{ fontSize: "12px", color: "#b91c1c", marginTop: "2px" }}>{error}</div>
+            <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "4px" }}>Make sure the backend server is running.</div>
+          </div>
+        </div>
+      )}
+
+      <div style={card}>
+        {isLoading && employees.length === 0 ? (
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "260px", gap: "12px", color: "#94a3b8" }}>
+            <Loader2 size={28} style={{ animation: "spin 1s linear infinite", color: "#667eea" }} />
+            <span style={{ fontSize: "13px" }}>Fetching from HRIS API...</span>
+          </div>
+        ) : employees.length === 0 ? (
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "260px", gap: "8px", color: "#94a3b8" }}>
+            <Users size={36} />
+            <span style={{ fontSize: "14px", fontWeight: 600 }}>No employees found</span>
+            <span style={{ fontSize: "12px" }}>Try a different search term.</span>
+          </div>
+        ) : (
+          <div style={{ overflowX: "auto", maxHeight: "560px", overflowY: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+              <thead>
+                <tr>
+                  <th style={th}>#</th>
+                  <th style={th}>Employee ID</th>
+                  <th style={th}>Full Name</th>
+                  <th style={th}>Position</th>
+                  <th style={th}><span style={{ display: "flex", alignItems: "center", gap: "4px" }}><Phone size={11}/>Emergency #</span></th>
+                  <th style={th}><span style={{ display: "flex", alignItems: "center", gap: "4px" }}><UserCheck size={11}/>Contact Person</span></th>
+                  <th style={th}>Photo</th>
+                  <th style={th}>Signature</th>
+                </tr>
+              </thead>
+              <tbody>
+                {employees.map((emp, idx) => (
+                  <tr key={emp.id ?? idx}
+                    onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "#f8fafc"}
+                    onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "#fff"}>
+                    <td style={{ ...td, color: "#94a3b8", fontSize: "11px" }}>{page * LIMIT + idx + 1}</td>
+                    <td style={{ ...td, fontFamily: "monospace", fontWeight: 700, color: "#667eea", fontSize: "12px" }}>{emp.employee_id || "—"}</td>
+                    <td style={{ ...td, fontWeight: 600 }}>{emp.full_name || "—"}</td>
+                    <td style={{ ...td, color: "#64748b" }}>{emp.position || <span style={{ color: "#cbd5e1", fontSize: "11px" }}>—</span>}</td>
+                    <td style={td}>{emp.emergency_contact_num ? <span style={{ fontFamily: "monospace", fontSize: "12px" }}>{emp.emergency_contact_num}</span> : <span style={{ color: "#cbd5e1", fontSize: "11px" }}>—</span>}</td>
+                    <td style={{ ...td, color: "#64748b", fontSize: "12px" }}>{emp.emergency_contact_person || <span style={{ color: "#cbd5e1", fontSize: "11px" }}>—</span>}</td>
+                    <td style={td}>{emp.picture ? <span style={{ background: "#ecfdf5", color: "#059669", fontSize: "10px", fontWeight: 700, padding: "2px 8px", borderRadius: "20px" }}>✓ Yes</span> : <span style={{ background: "#f8fafc", color: "#cbd5e1", fontSize: "10px", padding: "2px 8px", borderRadius: "20px" }}>—</span>}</td>
+                    <td style={td}>{emp.signature ? <span style={{ background: "#ecfdf5", color: "#059669", fontSize: "10px", fontWeight: 700, padding: "2px 8px", borderRadius: "20px" }}>✓ Yes</span> : <span style={{ background: "#f8fafc", color: "#cbd5e1", fontSize: "10px", padding: "2px 8px", borderRadius: "20px" }}>—</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {employees.length > 0 && (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderTop: "1px solid #f1f5f9", background: "#fafafa" }}>
+            <span style={{ fontSize: "12px", color: "#64748b" }}>
+              {isLoading ? "Loading..." : `Showing ${page * LIMIT + 1}–${page * LIMIT + employees.length}${totalCount ? ` of ${totalCount.toLocaleString()}` : ""}`}
+            </span>
+            <div style={{ display: "flex", gap: "6px" }}>
+              <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}
+                style={{ padding: "6px 12px", borderRadius: "8px", border: "1px solid #e2e8f0", background: page === 0 ? "#f8fafc" : "#fff", color: page === 0 ? "#cbd5e1" : "#475569", cursor: page === 0 ? "default" : "pointer", fontSize: "12px", fontWeight: 600 }}>
+                ← Prev
+              </button>
+              <button onClick={() => setPage(p => p + 1)} disabled={employees.length < LIMIT}
+                style={{ padding: "6px 12px", borderRadius: "8px", border: "1px solid #e2e8f0", background: employees.length < LIMIT ? "#f8fafc" : "#fff", color: employees.length < LIMIT ? "#cbd5e1" : "#475569", cursor: employees.length < LIMIT ? "default" : "pointer", fontSize: "12px", fontWeight: 600 }}>
+                Next →
               </button>
             </div>
           </div>
-        </div>
-      </nav>
-
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 py-6 sm:px-0">
-          
-          {/* Header & Search */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
-            <div>
-              <h1 className="text-2xl font-bold text-slate-900">Employee Directory</h1>
-              <p className="text-sm text-slate-500">Live data proxied securely through server.js</p>
-            </div>
-            
-            <div className="relative w-full md:w-72">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Search className="h-5 w-5 text-slate-400" />
-              </div>
-              <input
-                type="text"
-                placeholder="Search employees..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="block w-full pl-10 pr-3 py-2 border border-slate-300 rounded-lg leading-5 bg-white placeholder-slate-500 focus:outline-none focus:placeholder-slate-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition duration-150 ease-in-out"
-              />
-            </div>
-          </div>
-
-          {/* Error State */}
-          {error && (
-            <div className="mb-6 bg-red-50 border-l-4 border-red-500 p-4 rounded-md flex items-start">
-              <AlertCircle className="h-5 w-5 text-red-500 mr-2 mt-0.5" />
-              <div>
-                <h3 className="text-sm font-medium text-red-800">Backend Connection Error</h3>
-                <p className="mt-1 text-sm text-red-700">{error}</p>
-                <p className="mt-2 text-xs text-red-600 font-mono">Showing mock data instead. Make sure server.js is running.</p>
-              </div>
-            </div>
-          )}
-
-          {/* Data Table */}
-          <div className="bg-white shadow overflow-hidden sm:rounded-lg border border-slate-200">
-            {isLoading && employees.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-64">
-                <Loader2 className="h-8 w-8 text-blue-500 animate-spin mb-4" />
-                <p className="text-slate-500 text-sm">Fetching records from backend API...</p>
-              </div>
-            ) : employees.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-64">
-                <Users className="h-12 w-12 text-slate-300 mb-4" />
-                <p className="text-slate-500 text-lg font-medium">No employees found</p>
-                <p className="text-slate-400 text-sm">Try adjusting your search query.</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
-                <table className="min-w-full divide-y divide-slate-200">
-                  <thead className="bg-slate-50 sticky top-0 z-10">
-                    <tr>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                        Employee ID
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                        Name
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                        Department
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                        Status
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-slate-200">
-                    {employees.map((employee, idx) => (
-                      <tr key={employee.employee_id || employee.id || idx} className="hover:bg-slate-50 transition-colors">
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">
-                          {employee.employee_id || employee.id || idx}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-700">
-                          {employee.full_name || employee.fullname || employee.name || 'Unknown'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
-                          {employee.department || 'N/A'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                            (employee.status || '').toLowerCase() === 'active' 
-                              ? 'bg-green-100 text-green-800' 
-                              : 'bg-slate-100 text-slate-800'
-                          }`}>
-                            {employee.status || 'Active'}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-            
-            {/* Simple Pagination Controls */}
-            <div className="bg-white px-4 py-3 border-t border-slate-200 flex items-center justify-between sm:px-6">
-              <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-sm text-slate-700">
-                    Showing page <span className="font-medium">{page + 1}</span> (Limit: {LIMIT})
-                  </p>
-                </div>
-                <div>
-                  <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
-                    <button
-                      onClick={() => setPage(p => Math.max(0, p - 1))}
-                      disabled={page === 0}
-                      className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-slate-300 bg-white text-sm font-medium text-slate-500 hover:bg-slate-50 disabled:opacity-50"
-                    >
-                      Previous
-                    </button>
-                    <button
-                      onClick={() => setPage(p => p + 1)}
-                      disabled={employees.length < LIMIT}
-                      className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-slate-300 bg-white text-sm font-medium text-slate-500 hover:bg-slate-50 disabled:opacity-50"
-                    >
-                      Next
-                    </button>
-                  </nav>
-                </div>
-              </div>
-            </div>
-          </div>
-
-        </div>
-      </main>
+        )}
+      </div>
     </div>
   );
 }

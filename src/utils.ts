@@ -1,9 +1,16 @@
-import { API_URL, BASE_URL } from './types';
+import { API_URL } from './types';
 
 export function resolveImg(url: string | null | undefined): string | null {
-  if (!url) return null;
-  if (url.startsWith('data:')) return url;
-  return `${BASE_URL}${url}`;
+  if (!url || typeof url !== 'string') return null;
+  const u = url.trim();
+  if (!u) return null;
+  if (u.startsWith('data:')) return u;
+  if (u.startsWith('http://') || u.startsWith('https://')) return u;
+  if (u.startsWith('/')) return u;
+  // Bare filename from HRIS API e.g. "74dcf6a97073c25ef48ac87376c0caa7.jpg"
+  const parts = u.split('/');
+  const filename = parts[parts.length - 1];
+  return '/images/' + filename;
 }
 
 export async function uploadImage(file: File, employeeName: string, fileType: 'photo' | 'signature'): Promise<string | null> {
@@ -24,8 +31,8 @@ export function hexToColorFilter(hex: string): string {
   const g = parseInt(hex.slice(3,5),16)/255;
   const b = parseInt(hex.slice(5,7),16)/255;
   const matrix = [0,0,0,0,r, 0,0,0,0,g, 0,0,0,0,b, -0.333,-0.333,-0.333,1,0].join(' ');
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg"><filter id="f"><feColorMatrix type="matrix" values="${matrix}"/></filter></svg>`;
-  return `url("data:image/svg+xml;base64,${btoa(svg)}#f")`;
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg"><filter id="f"><feColorMatrix type="matrix" values="' + matrix + '"/></filter></svg>';
+  return 'url("data:image/svg+xml;base64,' + btoa(svg) + '#f")';
 }
 
 export function hexToColorFilterWhite(hex: string): string {
@@ -34,6 +41,6 @@ export function hexToColorFilterWhite(hex: string): string {
   const g = parseInt(hex.slice(3,5),16)/255;
   const b = parseInt(hex.slice(5,7),16)/255;
   const matrix = [0,0,0,0,r, 0,0,0,0,g, 0,0,0,0,b, 0.333,0.333,0.333,1,-1].join(' ');
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg"><filter id="f"><feColorMatrix type="matrix" values="${matrix}"/></filter></svg>`;
-  return `url("data:image/svg+xml;base64,${btoa(svg)}#f")`;
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg"><filter id="f"><feColorMatrix type="matrix" values="' + matrix + '"/></filter></svg>';
+  return 'url("data:image/svg+xml;base64,' + btoa(svg) + '#f")';
 }

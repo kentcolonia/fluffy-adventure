@@ -13,7 +13,8 @@ const defaultFrontFields: IDField[] = [
 ];
 
 const defaultBackFields: IDField[] = [
-  { id: 'emergency_num', label: 'Emergency Number', value: '09123456789', x: 50, y: 14, fontSize: 16, color: '#333333', bold: true, italic: false, align: 'center', visible: true },
+  { id: 'emergency_person', label: 'Emergency Contact Person', value: 'Contact Person Name', x: 50, y: 14, fontSize: 10, color: '#000000', bold: false, italic: false, align: 'center', visible: true },
+  { id: 'emergency_num',    label: 'Emergency Number',         value: '09123456789',         x: 50, y: 22, fontSize: 16, color: '#333333', bold: true,  italic: false, align: 'center', visible: true },
 ];
 
 // ── SHARED STYLES & COMPONENTS ──
