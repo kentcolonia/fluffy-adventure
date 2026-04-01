@@ -1,16 +1,17 @@
-import React, { useState, useEffect } from 'react';
-import { Users, Plus, FileSpreadsheet, CreditCard, Download, Menu, Shield, Printer, X, Home } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { FileSpreadsheet, CreditCard, Download, Menu, Shield, X, Home, Clock } from 'lucide-react';
 import { API_URL } from './types';
-import type { EmployeeRecord, Employee, ActiveSection, EditingID } from './types';
+import type { Employee, ActiveSection, EditingID } from './types';
 import LoginPage from './components/LoginPage';
 import HomePage from './components/HomePage';
-import PersonnelRecords from './components/PersonnelRecords';
-import AddPersonnelModal from './components/AddPersonnel';
 import LoadDatabase from './components/LoadDatabase';
 import SavedIDs from './components/SavedIDs';
 import IDBuilder from './components/IDBuilder';
 import TemplateManager from './components/TemplateManager';
 import AccountManager from './components/AccountManager';
+
+const INACTIVE_MS = 60_000;  // 1 minute total inactivity before logout
+const WARNING_MS  = 30_000;  // show warning for last 30 seconds
 
 export default function App() {
   // ── Auth state ──
@@ -23,19 +24,62 @@ export default function App() {
     return null;
   });
 
-  const handleLogout = () => {
+  const [showTimeoutWarning, setShowTimeoutWarning] = useState(false);
+  const [countdown, setCountdown] = useState(30);
+  const logoutTimer        = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const warningTimer       = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const countdownInterval  = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const handleLogout = useCallback((reason?: string) => {
     localStorage.removeItem('avpass_token');
     localStorage.removeItem('avpass_user');
     setAuthUser(null);
-  };
+    setShowTimeoutWarning(false);
+    if (reason) console.info(`[AUTH] Logged out: ${reason}`);
+  }, []);
 
-  const [records, setRecords] = useState<EmployeeRecord[]>([]);
+  const clearTimers = useCallback(() => {
+    if (logoutTimer.current)        clearTimeout(logoutTimer.current);
+    if (warningTimer.current)       clearTimeout(warningTimer.current);
+    if (countdownInterval.current)  clearInterval(countdownInterval.current);
+  }, []);
+
+  const resetInactivityTimer = useCallback(() => {
+    if (!authUser) return;
+    clearTimers();
+    setShowTimeoutWarning(false);
+    // Show warning 30 s before logout
+    warningTimer.current = setTimeout(() => {
+      setShowTimeoutWarning(true);
+      setCountdown(WARNING_MS / 1000);
+      countdownInterval.current = setInterval(() => {
+        setCountdown(c => {
+          if (c <= 1) { clearInterval(countdownInterval.current!); return 0; }
+          return c - 1;
+        });
+      }, 1000);
+    }, INACTIVE_MS - WARNING_MS);
+    // Auto-logout after full inactivity period
+    logoutTimer.current = setTimeout(() => handleLogout('inactivity'), INACTIVE_MS);
+  }, [authUser, clearTimers, handleLogout]);
+
+  // Attach/detach activity listeners whenever login state changes
+  useEffect(() => {
+    if (!authUser) { clearTimers(); return; }
+    resetInactivityTimer();
+    const events = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'click'];
+    events.forEach(e => window.addEventListener(e, resetInactivityTimer, { passive: true }));
+    return () => {
+      clearTimers();
+      events.forEach(e => window.removeEventListener(e, resetInactivityTimer));
+    };
+  }, [authUser, resetInactivityTimer, clearTimers]);
+
   const [employeeDatabase, setEmployeeDatabase] = useState<Employee[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeSection, setActiveSection] = useState<ActiveSection>('home');
   const [savedIDs, setSavedIDs] = useState<any[]>([]);
-  const [showAddModal, setShowAddModal] = useState(false);
   const [editingID, setEditingID] = useState<EditingID | null>(null);
   const [pendingTemplate, setPendingTemplate] = useState<any | null>(null);
 
@@ -54,9 +98,8 @@ export default function App() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [dbRes, recRes] = await Promise.all([fetch(`${API_URL}/database`), fetch(`${API_URL}/records`)]);
+        const dbRes = await fetch(`${API_URL}/database`);
         if (dbRes.ok) setEmployeeDatabase(await dbRes.json());
-        if (recRes.ok) setRecords(await recRes.json());
       } catch { console.error('Connection failed.'); }
       finally { setIsLoading(false); }
     };
@@ -68,37 +111,29 @@ export default function App() {
     loadData();
   }, []);
 
-  const stayIn = records.filter(r => r.indication === 'Stay-In').length;
-  const stayOut = records.filter(r => r.indication === 'Stay-Out').length;
-
-  const navItems: { id: ActiveSection; label: string; icon: React.ReactNode; color: string; badge?: number | null; isModal?: boolean }[] = [
-    { id: 'home',      label: 'Home',        icon: <Home size={18}/>,            color: '#667eea' },
-    { id: 'dashboard', label: 'Records',     icon: <Users size={18}/>,           color: '#667eea', badge: records.length },
-    { id: 'add',       label: 'Add',         icon: <Plus size={18}/>,            color: '#10b981', isModal: true },
-    { id: 'idbuilder', label: 'ID Builder',  icon: <CreditCard size={18}/>,      color: '#ec4899' },
-    { id: 'idrecords', label: 'Saved IDs',   icon: <Download size={18}/>,        color: '#8b5cf6', badge: savedIDs.length || null },
-    { id: 'templates', label: 'Templates',    icon: <CreditCard size={18}/>,      color: '#f59e0b' },
+  const navItems: { id: ActiveSection; label: string; icon: React.ReactNode; color: string; badge?: number | null }[] = [
+    { id: 'home',      label: 'Home',       icon: <Home size={18}/>,       color: '#667eea' },
+    { id: 'idbuilder', label: 'ID Builder', icon: <CreditCard size={18}/>, color: '#ec4899' },
+    { id: 'idrecords', label: 'Saved IDs',  icon: <Download size={18}/>,   color: '#8b5cf6', badge: savedIDs.length || null },
+    { id: 'templates', label: 'Templates',  icon: <CreditCard size={18}/>, color: '#f59e0b' },
   ];
 
-  const allNavItems: { id: ActiveSection; label: string; icon: React.ReactNode; color: string; badge?: number | null; isModal?: boolean }[] = [
-    { id: 'home',      label: 'Home',           icon: <Home size={16}/>,            color: '#667eea' },
-    { id: 'dashboard', label: 'Personnel Records', icon: <Users size={16}/>,        color: '#667eea', badge: records.length },
-    { id: 'add',       label: 'Add Personnel',  icon: <Plus size={16}/>,            color: '#10b981', isModal: true },
-    { id: 'database',  label: 'Load Database',  icon: <FileSpreadsheet size={16}/>, color: '#f59e0b', badge: employeeDatabase.length || null },
-    { id: 'idbuilder', label: 'ID Builder',     icon: <CreditCard size={16}/>,      color: '#ec4899' },
-    { id: 'idrecords',  label: 'Saved IDs',      icon: <Download size={16}/>,        color: '#8b5cf6', badge: savedIDs.length || null },
-    { id: 'templates',  label: 'ID Templates',   icon: <CreditCard size={16}/>,      color: '#f59e0b', badge: null },
-    { id: 'accounts',   label: 'Accounts',        icon: <Users size={16}/>,           color: '#64748b' },
+  const allNavItems: { id: ActiveSection; label: string; icon: React.ReactNode; color: string; badge?: number | null }[] = [
+    { id: 'home',      label: 'Home',          icon: <Home size={16}/>,            color: '#667eea' },
+    { id: 'database',  label: 'Load Database', icon: <FileSpreadsheet size={16}/>, color: '#f59e0b', badge: employeeDatabase.length || null },
+    { id: 'idbuilder', label: 'ID Builder',    icon: <CreditCard size={16}/>,      color: '#ec4899' },
+    { id: 'idrecords', label: 'Saved IDs',     icon: <Download size={16}/>,        color: '#8b5cf6', badge: savedIDs.length || null },
+    { id: 'templates', label: 'ID Templates',  icon: <CreditCard size={16}/>,      color: '#f59e0b', badge: null },
+    { id: 'accounts',  label: 'Accounts',      icon: <Shield size={16}/>,          color: '#64748b' },
   ];
 
   const sectionTitle: Record<ActiveSection, string> = {
-    home: 'Home', dashboard: 'Personnel Records', add: 'Add Personnel',
-    database: 'Load Database', idbuilder: 'ID Builder', idrecords: 'Saved IDs', templates: 'ID Templates', accounts: 'Account Manager',
+    home: 'Home', database: 'Load Database',
+    idbuilder: 'ID Builder', idrecords: 'Saved IDs', templates: 'ID Templates', accounts: 'Account Manager',
   };
 
   const handleNav = (item: typeof allNavItems[0]) => {
-    if (item.isModal) { setShowAddModal(true); setSidebarOpen(false); }
-    else { setActiveSection(item.id); setSidebarOpen(false); }
+    setActiveSection(item.id); setSidebarOpen(false);
   };
 
   // Show login if not authenticated
@@ -123,6 +158,33 @@ export default function App() {
   return (
     <div style={{ display: 'flex', minHeight: '100vh', height: '100vh', background: '#f8fafc', fontFamily: "'Inter','Segoe UI',system-ui,sans-serif", color: '#0f172a', overflow: 'hidden' }}>
 
+      {/* ── INACTIVITY WARNING MODAL ── */}
+      {showTimeoutWarning && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.7)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(6px)' }}>
+          <div style={{ background: '#fff', borderRadius: '24px', padding: '36px 40px', maxWidth: '380px', width: '90%', textAlign: 'center', boxShadow: '0 24px 64px rgba(0,0,0,0.25)', animation: 'modalIn 0.2s cubic-bezier(0.34,1.56,0.64,1)' }}>
+            <div style={{ background: '#fef3c7', borderRadius: '50%', width: '60px', height: '60px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+              <Clock size={28} color="#d97706" />
+            </div>
+            <h2 style={{ margin: '0 0 8px', fontSize: '20px', fontWeight: 800, color: '#0f172a' }}>Still there?</h2>
+            <p style={{ margin: '0 0 6px', fontSize: '14px', color: '#64748b' }}>You've been inactive. You'll be logged out in</p>
+            <div style={{ fontSize: '48px', fontWeight: 900, color: countdown <= 10 ? '#ef4444' : '#f59e0b', margin: '12px 0', lineHeight: 1, transition: 'color 0.3s' }}>
+              {countdown}
+            </div>
+            <p style={{ margin: '0 0 24px', fontSize: '13px', color: '#94a3b8' }}>seconds</p>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button onClick={() => handleLogout('manual')}
+                style={{ flex: 1, background: '#f8fafc', color: '#64748b', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '11px', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>
+                Log Out
+              </button>
+              <button onClick={resetInactivityTimer}
+                style={{ flex: 2, background: 'linear-gradient(135deg,#667eea,#764ba2)', color: '#fff', border: 'none', borderRadius: '12px', padding: '11px', cursor: 'pointer', fontSize: '13px', fontWeight: 700, boxShadow: '0 4px 14px rgba(102,126,234,0.4)' }}>
+                Stay Logged In
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── DESKTOP SIDEBAR ── */}
       {!isMobile && (
         <aside style={{ width: sidebarOpen ? '240px' : '64px', background: '#fff', transition: 'width 0.25s cubic-bezier(0.4,0,0.2,1)', flexShrink: 0, display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', borderRight: '1px solid #e2e8f0', boxShadow: '4px 0 24px rgba(0,0,0,0.04)' }} className="print:hidden">
@@ -141,34 +203,21 @@ export default function App() {
             {sidebarOpen && <p style={{ color: '#94a3b8', fontSize: '10px', fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', padding: '0 10px', margin: '0 0 8px' }}>Navigation</p>}
             {allNavItems.map(item => (
               <button key={item.id} onClick={() => handleNav(item)} title={!sidebarOpen ? item.label : undefined}
-                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '10px', padding: '10px', borderRadius: '12px', border: 'none', cursor: 'pointer', background: (!item.isModal && activeSection === item.id) ? `${item.color}15` : 'transparent', color: (!item.isModal && activeSection === item.id) ? item.color : '#64748b', marginBottom: '2px', transition: 'all 0.15s', textAlign: 'left', justifyContent: sidebarOpen ? 'flex-start' : 'center' }}
+                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '10px', padding: '10px', borderRadius: '12px', border: 'none', cursor: 'pointer', background: activeSection === item.id ? `${item.color}15` : 'transparent', color: activeSection === item.id ? item.color : '#64748b', marginBottom: '2px', transition: 'all 0.15s', textAlign: 'left', justifyContent: sidebarOpen ? 'flex-start' : 'center' }}
                 onMouseEnter={e => { if (activeSection !== item.id) (e.currentTarget as HTMLElement).style.background = '#f8fafc'; }}
                 onMouseLeave={e => { if (activeSection !== item.id) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
-                <span style={{ flexShrink: 0, color: (!item.isModal && activeSection === item.id) ? item.color : '#94a3b8' }}>{item.icon}</span>
+                <span style={{ flexShrink: 0, color: activeSection === item.id ? item.color : '#94a3b8' }}>{item.icon}</span>
                 {sidebarOpen && (
                   <>
-                    <span style={{ fontSize: '13px', fontWeight: (!item.isModal && activeSection === item.id) ? 600 : 400, flex: 1, whiteSpace: 'nowrap' }}>{item.label}</span>
+                    <span style={{ fontSize: '13px', fontWeight: activeSection === item.id ? 600 : 400, flex: 1, whiteSpace: 'nowrap' }}>{item.label}</span>
                     {item.badge != null && item.badge > 0 && (
-                      <span style={{ background: (!item.isModal && activeSection === item.id) ? item.color : '#e2e8f0', color: (!item.isModal && activeSection === item.id) ? '#fff' : '#64748b', fontSize: '10px', fontWeight: 700, padding: '2px 7px', borderRadius: '20px' }}>{item.badge}</span>
+                      <span style={{ background: activeSection === item.id ? item.color : '#e2e8f0', color: activeSection === item.id ? '#fff' : '#64748b', fontSize: '10px', fontWeight: 700, padding: '2px 7px', borderRadius: '20px' }}>{item.badge}</span>
                     )}
                   </>
                 )}
               </button>
             ))}
           </nav>
-          {sidebarOpen && (
-            <div style={{ padding: '12px', borderTop: '1px solid #f1f5f9' }}>
-              <p style={{ margin: '0 0 8px', color: '#94a3b8', fontSize: '10px', fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase' }}>Quick Stats</p>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                {[{ label: 'Stay-In', value: stayIn, color: '#10b981', bg: '#ecfdf5' }, { label: 'Stay-Out', value: stayOut, color: '#ef4444', bg: '#fef2f2' }].map(s => (
-                  <div key={s.label} style={{ background: s.bg, borderRadius: '10px', padding: '10px 12px' }}>
-                    <p style={{ margin: 0, color: s.color, fontSize: '20px', fontWeight: 800 }}>{s.value}</p>
-                    <p style={{ margin: '2px 0 0', color: s.color, fontSize: '10px', opacity: 0.7 }}>{s.label}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
           <button onClick={() => setSidebarOpen(!sidebarOpen)}
             style={{ margin: '8px', padding: '10px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', cursor: 'pointer', color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Menu size={15} />
@@ -195,25 +244,15 @@ export default function App() {
               <p style={{ color: '#94a3b8', fontSize: '10px', fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', padding: '0 10px', margin: '0 0 8px' }}>Navigation</p>
               {allNavItems.map(item => (
                 <button key={item.id} onClick={() => handleNav(item)}
-                  style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 14px', borderRadius: '12px', border: 'none', cursor: 'pointer', background: (!item.isModal && activeSection === item.id) ? `${item.color}15` : 'transparent', color: (!item.isModal && activeSection === item.id) ? item.color : '#64748b', marginBottom: '4px', textAlign: 'left' }}>
-                  <span style={{ color: (!item.isModal && activeSection === item.id) ? item.color : '#94a3b8' }}>{item.icon}</span>
-                  <span style={{ fontSize: '14px', fontWeight: (!item.isModal && activeSection === item.id) ? 600 : 400, flex: 1 }}>{item.label}</span>
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 14px', borderRadius: '12px', border: 'none', cursor: 'pointer', background: activeSection === item.id ? `${item.color}15` : 'transparent', color: activeSection === item.id ? item.color : '#64748b', marginBottom: '4px', textAlign: 'left' }}>
+                  <span style={{ color: activeSection === item.id ? item.color : '#94a3b8' }}>{item.icon}</span>
+                  <span style={{ fontSize: '14px', fontWeight: activeSection === item.id ? 600 : 400, flex: 1 }}>{item.label}</span>
                   {item.badge != null && item.badge > 0 && (
-                    <span style={{ background: (!item.isModal && activeSection === item.id) ? item.color : '#e2e8f0', color: (!item.isModal && activeSection === item.id) ? '#fff' : '#64748b', fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '20px' }}>{item.badge}</span>
+                    <span style={{ background: activeSection === item.id ? item.color : '#e2e8f0', color: activeSection === item.id ? '#fff' : '#64748b', fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '20px' }}>{item.badge}</span>
                   )}
                 </button>
               ))}
             </nav>
-            <div style={{ padding: '16px', borderTop: '1px solid #f1f5f9' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                {[{ label: 'Stay-In', value: stayIn, color: '#10b981', bg: '#ecfdf5' }, { label: 'Stay-Out', value: stayOut, color: '#ef4444', bg: '#fef2f2' }].map(s => (
-                  <div key={s.label} style={{ background: s.bg, borderRadius: '10px', padding: '12px' }}>
-                    <p style={{ margin: 0, color: s.color, fontSize: '22px', fontWeight: 800 }}>{s.value}</p>
-                    <p style={{ margin: '2px 0 0', color: s.color, fontSize: '11px', opacity: 0.7 }}>{s.label}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
           </aside>
         </>
       )}
@@ -248,11 +287,6 @@ export default function App() {
               <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#10b981' }}></div>
               {!isMobile && <span style={{ color: '#64748b', fontSize: '11px' }}>Online</span>}
             </div>
-            {activeSection === 'dashboard' && records.length > 0 && (
-              <button onClick={() => window.print()} style={{ background: 'linear-gradient(135deg,#667eea,#764ba2)', color: '#fff', border: 'none', borderRadius: '10px', padding: '7px 12px', cursor: 'pointer', fontSize: '12px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '5px', boxShadow: '0 2px 8px rgba(102,126,234,0.4)' }}>
-                <Printer size={13} />{!isMobile && ' Print'}
-              </button>
-            )}
             <span style={{ color: '#e2e8f0' }}>|</span>
             {/* User badge */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#f8fafc', borderRadius: '10px', padding: '4px 10px 4px 5px', border: '1px solid #e2e8f0' }}>
@@ -261,7 +295,7 @@ export default function App() {
               </div>
               {!isMobile && <span style={{ fontSize: '12px', fontWeight: 600, color: '#0f172a' }}>{authUser.username}</span>}
             </div>
-            <button onClick={handleLogout}
+            <button onClick={() => handleLogout('manual')}
               style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: '8px', padding: '6px 12px', cursor: 'pointer', fontSize: '12px', fontWeight: 600, whiteSpace: 'nowrap' }}>
               {isMobile ? '⏻' : 'Sign Out'}
             </button>
@@ -270,14 +304,11 @@ export default function App() {
 
         {/* Content */}
         <div style={{ flex: 1, overflowY: 'auto', padding: activeSection === 'idbuilder' ? '0' : isMobile ? '16px 12px 80px' : '24px' }}>
-          {activeSection === 'home' && <HomePage records={records} savedIDs={savedIDs} employeeDatabase={employeeDatabase} onNavigate={setActiveSection} onAddPersonnel={() => setShowAddModal(true)} />}
-          {activeSection === 'dashboard' && <PersonnelRecords records={records} setRecords={setRecords} employeeDatabase={employeeDatabase} onAddPersonnel={() => setShowAddModal(true)} />}
+          {activeSection === 'home' && <HomePage savedIDs={savedIDs} employeeDatabase={employeeDatabase} onNavigate={setActiveSection} />}
           {activeSection === 'database' && <LoadDatabase employeeDatabase={employeeDatabase} setEmployeeDatabase={setEmployeeDatabase} />}
-          {activeSection === 'idbuilder' && <IDBuilder records={records} editingID={editingID} onEditSaved={_id => { setEditingID(null); }} pendingTemplate={pendingTemplate} onTemplatLoaded={() => setPendingTemplate(null)} />}
-          {activeSection === 'templates' && <TemplateManager />
-          }
-          {activeSection === 'accounts' && <AccountManager currentUser={authUser} />
-          }
+          {activeSection === 'idbuilder' && <IDBuilder editingID={editingID} onEditSaved={_id => { setEditingID(null); }} pendingTemplate={pendingTemplate} onTemplatLoaded={() => setPendingTemplate(null)} />}
+          {activeSection === 'templates' && <TemplateManager />}
+          {activeSection === 'accounts' && <AccountManager currentUser={authUser} />}
           {activeSection === 'idrecords' && <SavedIDs savedIDs={savedIDs} setSavedIDs={setSavedIDs} onEditInBuilder={entry => { setEditingID({ id: entry.id, employeeName: entry.employeeName, position: entry.position, front: entry.front, back: entry.back }); setActiveSection('idbuilder'); }} />}
         </div>
 
@@ -286,35 +317,22 @@ export default function App() {
           <nav style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'rgba(255,255,255,0.97)', backdropFilter: 'blur(16px)', borderTop: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', zIndex: 30, boxShadow: '0 -4px 24px rgba(0,0,0,0.08)' }} className="print:hidden">
             {navItems.map(item => (
               <button key={item.id} onClick={() => handleNav(item)}
-                style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '10px 4px', border: 'none', background: 'transparent', cursor: 'pointer', color: (!item.isModal && activeSection === item.id) ? item.color : '#94a3b8', transition: 'all 0.15s', position: 'relative', minHeight: '60px' }}>
-                {/* Active indicator */}
-                {!item.isModal && activeSection === item.id && (
+                style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '10px 4px', border: 'none', background: 'transparent', cursor: 'pointer', color: activeSection === item.id ? item.color : '#94a3b8', transition: 'all 0.15s', position: 'relative', minHeight: '60px' }}>
+                {activeSection === item.id && (
                   <div style={{ position: 'absolute', top: 0, left: '20%', right: '20%', height: '3px', background: item.color, borderRadius: '0 0 4px 4px' }} />
                 )}
-                {/* Add button special style */}
-                {item.isModal ? (
-                  <div style={{ background: 'linear-gradient(135deg,#667eea,#764ba2)', borderRadius: '14px', padding: '10px', display: 'flex', boxShadow: '0 4px 14px rgba(102,126,234,0.45)', marginBottom: '2px' }}>
-                    <Plus size={18} color="white" />
-                  </div>
-                ) : (
-                  <div style={{ position: 'relative' }}>
-                    {item.icon}
-                    {item.badge != null && item.badge > 0 && (
-                      <span style={{ position: 'absolute', top: '-6px', right: '-8px', background: item.color, color: '#fff', fontSize: '9px', fontWeight: 700, padding: '1px 4px', borderRadius: '20px', minWidth: '14px', textAlign: 'center' }}>{item.badge > 99 ? '99+' : item.badge}</span>
-                    )}
-                  </div>
-                )}
-                <span style={{ fontSize: '10px', fontWeight: (!item.isModal && activeSection === item.id) ? 700 : 400, marginTop: item.isModal ? '0' : '4px' }}>{item.label}</span>
+                <div style={{ position: 'relative' }}>
+                  {item.icon}
+                  {item.badge != null && item.badge > 0 && (
+                    <span style={{ position: 'absolute', top: '-6px', right: '-8px', background: item.color, color: '#fff', fontSize: '9px', fontWeight: 700, padding: '1px 4px', borderRadius: '20px', minWidth: '14px', textAlign: 'center' }}>{item.badge > 99 ? '99+' : item.badge}</span>
+                  )}
+                </div>
+                <span style={{ fontSize: '10px', fontWeight: activeSection === item.id ? 700 : 400, marginTop: '4px' }}>{item.label}</span>
               </button>
             ))}
           </nav>
         )}
       </div>
-
-      {/* Add Personnel Modal */}
-      {showAddModal && (
-        <AddPersonnelModal records={records} setRecords={setRecords} employeeDatabase={employeeDatabase} onClose={() => setShowAddModal(false)} />
-      )}
 
       <style>{`
         * { box-sizing: border-box; }

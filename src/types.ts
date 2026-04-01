@@ -57,6 +57,11 @@ export interface IDSide {
   sigShadowBlur?: number; sigShadowColor?: string;
   sigBrightness?: number; sigContrast?: number;
   sigColorize?: boolean; sigColorizeColor?: string; sigInkDark?: boolean;
+  // QR Code
+  showQR?: boolean;
+  qrX?: number; qrY?: number; qrSize?: number;
+  qrUrl?: string;
+  qrFg?: string; qrBg?: string;
 }
 
 export interface IDTemplate {
@@ -68,7 +73,7 @@ export interface IDTemplate {
   back: IDSide;
 }
 
-export type ActiveSection = 'home' | 'dashboard' | 'add' | 'database' | 'idbuilder' | 'idrecords' | 'templates' | 'accounts';
+export type ActiveSection = 'home' | 'database' | 'idbuilder' | 'idrecords' | 'templates' | 'accounts';
 
 export interface EditingID {
   id: string;

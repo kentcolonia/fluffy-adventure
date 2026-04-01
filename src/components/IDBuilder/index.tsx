@@ -1,4 +1,5 @@
 import React from 'react';
+import QRCode from 'qrcode';
 import { Download, Loader2, Search, Settings, Image as ImageIcon, Save, Printer, RefreshCw, Undo, Redo, Grid, Magnet, X, MousePointer2, LayoutTemplate, Layers, Pencil, Trash2 } from 'lucide-react';
 import { API_URL } from '../../types';
 import type { EmployeeRecord, IDField, IDSide, IDTemplate } from '../../types';
@@ -6,16 +7,15 @@ import { resolveImg, hexToColorFilter, hexToColorFilterWhite } from '../../utils
 
 // ── DEFAULT FIELDS ──
 const defaultFrontFields: IDField[] = [
-  { id: 'nickname', label: 'First Name / Nickname', value: 'JESUS', x: 50, y: 62, fontSize: 22, color: '#ffffff', bold: true, italic: false, align: 'center', visible: true },
-  { id: 'idnum',    label: 'ID Number',              value: 'ABISC-231003', x: 50, y: 70, fontSize: 10, color: '#ffffff', bold: false, italic: false, align: 'center', visible: true },
-  { id: 'fullname', label: 'Full Name',               value: 'JESUS B. ILLUSTRISIMO', x: 50, y: 78, fontSize: 10, color: '#ffffff', bold: true, italic: false, align: 'center', visible: true },
-  { id: 'position', label: 'Position / Designation',  value: 'ASSISTANT PORT ENGINEER', x: 50, y: 84, fontSize: 9, color: '#ffffff', bold: false, italic: false, align: 'center', visible: true },
+  { id: 'nickname', label: 'First Name / Nickname', value: 'JESUS', x: 50, y: 62, fontSize: 22, color: '#ffffff', bold: true, italic: false, align: 'left', visible: false },
+  { id: 'idnum',    label: 'ID Number',              value: 'ABISC-231003', x: 32, y: 92, fontSize: 10, color: '#ffffff', bold: false, italic: false, align: 'left', visible: true },
+  { id: 'fullname', label: 'Full Name',               value: 'JESUS B. ILLUSTRISIMO', x: 13, y: 75, fontSize: 10, color: '#ffffff', bold: true, italic: false, align: 'left', visible: true },
+  { id: 'position', label: 'Position / Designation',  value: 'ASSISTANT PORT ENGINEER', x: 32, y: 92, fontSize: 9, color: '#ffffff', bold: false, italic: false, align: 'left', visible: true },
 ];
 
 const defaultBackFields: IDField[] = [
-  { id: 'emergency_person', label: 'Emergency Contact Person', value: 'Contact Person Name', x: 50, y: 14, fontSize: 12, color: '#000000', bold: false, italic: false, align: 'center', visible: true },
-  { id: 'emergency_num',    label: 'Emergency Number',         value: '09123456789',         x: 50, y: 22, fontSize: 12, color: '#000000', bold: true,  italic: false, align: 'center', visible: true },
-  
+  { id: 'emergency_num',    label: 'Emergency Number',         value: '09123456789',         x: 35, y: 20, fontSize: 10, color: '#ffffff', bold: false,  italic: false, align: 'center', visible: true },
+  { id: 'emergency_person', label: 'Emergency Contact Person', value: 'Contact Person Name', x: 43, y: 15, fontSize: 10, color: '#ffffff', bold: false, italic: false, align: 'center', visible: true },
 ];
 
 // ── SHARED STYLES & COMPONENTS ──
@@ -211,8 +211,15 @@ const FieldEditor = React.memo(({ field, onUpdate }: FieldEditorProps) => {
         <div>
           <label style={{display:'block',fontSize:'11px',fontWeight:600,color:'#475569',marginBottom:'6px'}}>Font Family</label>
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'8px'}}>
-            {([{label:'Sans-Serif',value:"'Inter','Segoe UI',sans-serif"},{label:'Serif',value:"Georgia,'Times New Roman',serif"},{label:'Monospace',value:"'Courier New',monospace"},{label:'Narrow',value:"'Arial Narrow',Impact,sans-serif"}] as const).map(f=>{
-              const active=(field.fontFamily||"'Inter','Segoe UI',sans-serif").includes(f.value.split(',')[0]);
+            {([
+                {label:'Sans-Serif', value:"'Inter','Segoe UI',sans-serif"},
+                {label:'Serif',      value:"Georgia,'Times New Roman',serif"},
+                {label:'Monospace',  value:"'Courier New',monospace"},
+                {label:'Narrow',     value:"'Arial Narrow',Impact,sans-serif"},
+                {label:'BankGothic', value:"'Bebas Neue','Rajdhani',Impact,sans-serif"},
+                {label:'Orbitron',   value:"'Orbitron','Rajdhani',sans-serif"},
+              ] as const).map(f=>{
+              const active=(field.fontFamily||"'Orbitron','Rajdhani',sans-serif").includes(f.value.split(',')[0]);
               return <button key={f.value} onClick={()=>onUpdate(field.id,{fontFamily:f.value})} style={{padding:'8px 4px',borderRadius:'8px',border:active?'1px solid #667eea':'1px solid #e2e8f0',background:active?'#667eea10':'#fff',color:active?'#667eea':'#64748b',cursor:'pointer',fontSize:'11px',fontWeight:active?600:400,fontFamily:f.value,textAlign:'center'}}>{f.label}</button>;
             })}
           </div>
@@ -362,15 +369,18 @@ export default function IDBuilder({ editingID, onEditSaved, pendingTemplate, onT
   const [front, setFront] = React.useState<IDSide>(
     editingID?.front ?? {
       background:null, fields: defaultFrontFields,
-      photoX:50, photoY:30, photoW:55, photoH:38, showPhoto:true,
-      sigX:50,   sigY:74,  sigW:40,  sigH:8,   showSig:true,
+      photoX:50, photoY:49, photoW:70, photoH:50, showPhoto:true,
+      sigX:35,   sigY:86,  sigW:40,  sigH:8,   showSig:true,
     }
   );
   const [back, setBack] = React.useState<IDSide>(
     editingID?.back ?? {
       background:null, fields: defaultBackFields,
-      photoX:50, photoY:30, photoW:55, photoH:38, showPhoto:false,
-      sigX:50,   sigY:74,  sigW:40,  sigH:8,   showSig:false,
+      photoX:50, photoY:49, photoW:70, photoH:50, showPhoto:false,
+      sigX:35,   sigY:86,  sigW:40,  sigH:8,   showSig:false,
+      showQR:true, qrX:50, qrY:42, qrSize:70,
+      qrUrl:'https://employee.avegabros.com/verify/',
+      qrFg:'#000000', qrBg:'#ffffff',
     }
   );
   // Pre-fill employee name from editingID
@@ -434,6 +444,31 @@ export default function IDBuilder({ editingID, onEditSaved, pendingTemplate, onT
       setConfirmLoad(pendingTemplate);
     }
   }, [pendingTemplate]);
+  // ── QR Code ──
+  const PLACEHOLDER_QR = 'data:image/svg+xml;base64,' + btoa(`<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect width="100" height="100" fill="#ffffff"/><rect x="5" y="5" width="35" height="35" fill="none" stroke="#000" stroke-width="4"/><rect x="13" y="13" width="19" height="19" fill="#000"/><rect x="60" y="5" width="35" height="35" fill="none" stroke="#000" stroke-width="4"/><rect x="68" y="13" width="19" height="19" fill="#000"/><rect x="5" y="60" width="35" height="35" fill="none" stroke="#000" stroke-width="4"/><rect x="13" y="68" width="19" height="19" fill="#000"/><rect x="60" y="60" width="8" height="8" fill="#000"/><rect x="72" y="60" width="8" height="8" fill="#000"/><rect x="84" y="60" width="8" height="8" fill="#000"/><rect x="60" y="72" width="8" height="8" fill="#000"/><rect x="84" y="72" width="8" height="8" fill="#000"/><rect x="60" y="84" width="8" height="8" fill="#000"/><rect x="72" y="84" width="8" height="8" fill="#000"/><rect x="84" y="84" width="8" height="8" fill="#000"/><text x="50" y="54" text-anchor="middle" fill="#94a3b8" font-size="7" font-family="sans-serif">QR CODE</text></svg>`);
+  const [qrDataUrl, setQrDataUrl] = React.useState<string|null>(PLACEHOLDER_QR);
+  const selectedEmpCode = React.useRef<string>('');
+
+  const generateQR = React.useCallback(async (empCode: string, url: string, fg: string, bg: string) => {
+    if (!empCode) { setQrDataUrl(PLACEHOLDER_QR); return; }
+    try {
+      const fullUrl = url.endsWith('/') ? url + empCode : url + '/' + empCode;
+      const dataUrl = await QRCode.toDataURL(fullUrl, {
+        width: 200, margin: 1,
+        color: { dark: fg || '#000000', light: bg || '#ffffff' }
+      });
+      setQrDataUrl(dataUrl);
+    } catch { setQrDataUrl(PLACEHOLDER_QR); }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Regenerate QR when employee or QR settings change
+  React.useEffect(() => {
+    const empCode = selectedEmployee?.empCode || '';
+    selectedEmpCode.current = empCode;
+    generateQR(empCode, back.qrUrl || 'https://employee.avegabros.com/verify/', back.qrFg || '#000000', back.qrBg || '#ffffff');
+  }, [selectedEmployee, back.qrUrl, back.qrFg, back.qrBg, generateQR]);
+
   const [flipFace,  setFlipFace]  = React.useState<'front'|'back'>('front');
   const [flipAnim,  setFlipAnim]  = React.useState(false);
   const [frontUrl,  setFrontUrl]  = React.useState<string|null>(null);
@@ -751,6 +786,17 @@ export default function IDBuilder({ editingID, onEditSaved, pendingTemplate, onT
       }catch{}
     }
 
+    // ── QR Code on canvas ──
+    if(sd.showQR && qrDataUrl && which==='back') {
+      try {
+        const qrImg = await li(qrDataUrl);
+        const qSize = (sd.qrSize||70)/100*CARD_W;
+        const qx = (sd.qrX||50)/100*CARD_W - qSize/2;
+        const qy = (sd.qrY||42)/100*CARD_H - qSize/2;
+        ctx.drawImage(qrImg, qx, qy, qSize, qSize);
+      } catch {}
+    }
+
     sd.fields.filter(f=>f.visible).forEach(f=>{
       const ff=f.fontFamily||"'Inter','Segoe UI',sans-serif";
       ctx.font=`${f.italic?'italic ':''}${f.bold?'bold ':''}${f.fontSize}px ${ff}`;
@@ -955,6 +1001,23 @@ export default function IDBuilder({ editingID, onEditSaved, pendingTemplate, onT
             </div>
           )}
 
+          {/* ── QR Code preview ── */}
+          {which==='back' && sd.showQR && qrDataUrl && (
+            <div
+              onClick={e=>{e.stopPropagation(); if(isActive){setSelectedLayer(null);setSelectedFieldId(null);}}}
+              style={{
+                position:'absolute',
+                left:`${sd.qrX||50}%`, top:`${sd.qrY||42}%`,
+                width:`${sd.qrSize||70}%`, height:`${(sd.qrSize||70)/CARD_W*CARD_H}%`,
+                transform:'translate(-50%,-50%)',
+                zIndex:9, cursor:'default',
+                outline:(isActive&&which==='back'&&!selectedFieldId&&!selectedLayer)?'2px dashed rgba(16,185,129,0.6)':'none',
+                outlineOffset:'3px',
+              }}>
+              <img src={qrDataUrl} style={{width:'100%',height:'100%',objectFit:'contain',display:'block',pointerEvents:'none'}}/>
+            </div>
+          )}
+
           {sd.fields.filter(f=>f.visible).map(field=>{
             const isSel  = isActive&&selectedFieldId===field.id;
             const isDrag = draggingId===field.id;
@@ -1142,6 +1205,68 @@ export default function IDBuilder({ editingID, onEditSaved, pendingTemplate, onT
                 <div style={{background:'#ede9fe',color:'#7c3aed',padding:'6px',borderRadius:'6px'}}><Settings size={14}/></div>
                 <div style={{flex:1}}><div style={{fontSize:'12px',fontWeight:700,color:selectedLayer==='sig'?'#7c3aed':'#0f172a'}}>Signature Layer</div><div style={{fontSize:'11px',color:'#64748b',marginTop:'2px'}}>{side.showSig?'Visible':'Hidden'}</div></div>
               </button>
+
+              {/* QR Code layer — back card only */}
+              {activeSide==='back' && (
+                <div style={{marginBottom:'16px'}}>
+                  <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'8px'}}>
+                    <span style={{fontSize:'12px',fontWeight:700,color:'#0f172a',display:'flex',alignItems:'center',gap:'6px'}}>
+                      <span style={{background:'#ecfdf5',color:'#059669',padding:'4px 6px',borderRadius:'6px',fontSize:'11px'}}>QR</span>
+                      QR Code
+                    </span>
+                    <label style={{display:'flex',alignItems:'center',gap:'6px',cursor:'pointer'}}>
+                      <input type="checkbox" checked={!!back.showQR} onChange={e=>setBack(p=>({...p,showQR:e.target.checked}))} style={{accentColor:'#10b981',width:'14px',height:'14px'}}/>
+                      <span style={{fontSize:'11px',color:back.showQR?'#059669':'#94a3b8',fontWeight:600}}>{back.showQR?'ON':'OFF'}</span>
+                    </label>
+                  </div>
+                  {back.showQR && (
+                    <div style={{display:'flex',flexDirection:'column',gap:'8px',padding:'10px',background:'#f8fafc',borderRadius:'8px',border:'1px solid #e2e8f0'}}>
+                      <div>
+                        <label style={{fontSize:'11px',color:'#64748b',fontWeight:500,display:'block',marginBottom:'4px'}}>Verify URL</label>
+                        <input type="text" value={back.qrUrl||''} onChange={e=>setBack(p=>({...p,qrUrl:e.target.value}))}
+                          placeholder="https://employee.avegabros.com/verify/"
+                          style={{width:'100%',background:'#fff',border:'1px solid #e2e8f0',borderRadius:'6px',padding:'6px 8px',fontSize:'11px',color:'#0f172a',outline:'none',boxSizing:'border-box'}}/>
+                        <p style={{margin:'3px 0 0',fontSize:'10px',color:'#94a3b8'}}>Employee ID will be appended automatically</p>
+                      </div>
+                      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'8px'}}>
+                        <div>
+                          <label style={{fontSize:'11px',color:'#64748b',fontWeight:500,display:'block',marginBottom:'4px'}}>X %</label>
+                          <input type="number" value={back.qrX??50}  min={0} max={100} onChange={e=>setBack(p=>({...p,qrX:Number(e.target.value)}))} style={{width:'100%',background:'#fff',border:'1px solid #e2e8f0',borderRadius:'6px',padding:'5px 6px',fontSize:'11px',color:'#0f172a',outline:'none'}}/>
+                        </div>
+                        <div>
+                          <label style={{fontSize:'11px',color:'#64748b',fontWeight:500,display:'block',marginBottom:'4px'}}>Y %</label>
+                          <input type="number" value={back.qrY??42} min={0} max={100} onChange={e=>setBack(p=>({...p,qrY:Number(e.target.value)}))} style={{width:'100%',background:'#fff',border:'1px solid #e2e8f0',borderRadius:'6px',padding:'5px 6px',fontSize:'11px',color:'#0f172a',outline:'none'}}/>
+                        </div>
+                        <div>
+                          <label style={{fontSize:'11px',color:'#64748b',fontWeight:500,display:'block',marginBottom:'4px'}}>Size %</label>
+                          <input type="number" value={back.qrSize??70} min={10} max={80} onChange={e=>setBack(p=>({...p,qrSize:Number(e.target.value)}))} style={{width:'100%',background:'#fff',border:'1px solid #e2e8f0',borderRadius:'6px',padding:'5px 6px',fontSize:'11px',color:'#0f172a',outline:'none'}}/>
+                        </div>
+                      </div>
+                      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'8px'}}>
+                        <div>
+                          <label style={{fontSize:'11px',color:'#64748b',fontWeight:500,display:'block',marginBottom:'4px'}}>QR Color</label>
+                          <div style={{display:'flex',gap:'4px',alignItems:'center'}}>
+                            <input type="color" value={back.qrFg||'#000000'} onChange={e=>setBack(p=>({...p,qrFg:e.target.value}))} style={{width:'28px',height:'26px',border:'1px solid #e2e8f0',borderRadius:'4px',cursor:'pointer',padding:'1px'}}/>
+                            <input type="text" value={back.qrFg||'#000000'} onChange={e=>setBack(p=>({...p,qrFg:e.target.value}))} style={{flex:1,background:'#fff',border:'1px solid #e2e8f0',borderRadius:'6px',padding:'5px 6px',fontSize:'10px',fontFamily:'monospace',color:'#0f172a',outline:'none'}}/>
+                          </div>
+                        </div>
+                        <div>
+                          <label style={{fontSize:'11px',color:'#64748b',fontWeight:500,display:'block',marginBottom:'4px'}}>BG Color</label>
+                          <div style={{display:'flex',gap:'4px',alignItems:'center'}}>
+                            <input type="color" value={back.qrBg||'#ffffff'} onChange={e=>setBack(p=>({...p,qrBg:e.target.value}))} style={{width:'28px',height:'26px',border:'1px solid #e2e8f0',borderRadius:'4px',cursor:'pointer',padding:'1px'}}/>
+                            <input type="text" value={back.qrBg||'#ffffff'} onChange={e=>setBack(p=>({...p,qrBg:e.target.value}))} style={{flex:1,background:'#fff',border:'1px solid #e2e8f0',borderRadius:'6px',padding:'5px 6px',fontSize:'10px',fontFamily:'monospace',color:'#0f172a',outline:'none'}}/>
+                          </div>
+                        </div>
+                      </div>
+                      {!selectedEmployee && (
+                        <p style={{margin:0,fontSize:'10px',color:'#f59e0b',background:'#fffbeb',padding:'6px 8px',borderRadius:'6px',border:'1px solid #fde68a'}}>
+                          ⚠ Select an employee to preview QR
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div style={{height:'1px',background:'#f1f5f9',margin:'0 -20px 16px'}}/>
               

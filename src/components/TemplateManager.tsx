@@ -6,15 +6,15 @@ import { hexToColorFilter, hexToColorFilterWhite } from '../utils';
 
 // ── DEFAULT FIELDS ──
 const defaultFrontFields: IDField[] = [
-  { id: 'nickname', label: 'First Name / Nickname', value: 'JESUS', x: 50, y: 62, fontSize: 22, color: '#ffffff', bold: true, italic: false, align: 'center', visible: true },
-  { id: 'idnum',    label: 'ID Number',              value: 'ABISC-231003', x: 50, y: 70, fontSize: 10, color: '#ffffff', bold: false, italic: false, align: 'center', visible: true },
-  { id: 'fullname', label: 'Full Name',               value: 'JESUS B. ILLUSTRISIMO', x: 50, y: 78, fontSize: 10, color: '#ffffff', bold: true, italic: false, align: 'center', visible: true },
-  { id: 'position', label: 'Position / Designation',  value: 'ASSISTANT PORT ENGINEER', x: 50, y: 84, fontSize: 9, color: '#ffffff', bold: false, italic: false, align: 'center', visible: true },
+  { id: 'nickname', label: 'First Name / Nickname', value: 'JESUS', x: 35, y: 86, fontSize: 22, color: '#ffffff', bold: true, italic: false, align: 'left', visible: false },
+  { id: 'idnum',    label: 'ID Number',              value: 'ABISC-231003', x: 32, y: 92, fontSize: 10, color: '#ffffff', bold: false, italic: false, align: 'left', visible: true },
+  { id: 'fullname', label: 'Full Name',               value: 'JESUS B. ILLUSTRISIMO', x: 13, y: 75, fontSize: 10, color: '#ffffff', bold: true, italic: false, align: 'left', visible: true },
+  { id: 'position', label: 'Position / Designation',  value: 'ASSISTANT PORT ENGINEER', x: 13, y: 79, fontSize: 9, color: '#ffffff', bold: false, italic: false, align: 'left', visible: true },
 ];
 
 const defaultBackFields: IDField[] = [
-  { id: 'emergency_person', label: 'Emergency Contact Person', value: 'Contact Person Name', x: 50, y: 14, fontSize: 10, color: '#000000', bold: false, italic: false, align: 'center', visible: true },
-  { id: 'emergency_num',    label: 'Emergency Number',         value: '09123456789',         x: 50, y: 22, fontSize: 16, color: '#333333', bold: true,  italic: false, align: 'center', visible: true },
+  { id: 'emergency_person', label: 'Emergency Contact Person', value: 'Contact Person Name', x: 43, y: 15, fontSize: 10, color: '#ffffff', bold: false, italic: false, align: 'center', visible: true },
+  { id: 'emergency_num',    label: 'Emergency Number',         value: '09123456789',         x: 35, y: 20, fontSize: 10, color: '#ffffff', bold: false,  italic: false, align: 'center', visible: true },
 ];
 
 // ── SHARED STYLES & COMPONENTS ──
@@ -210,8 +210,15 @@ const FieldEditor = React.memo(({ field, onUpdate }: FieldEditorProps) => {
         <div>
           <label style={{display:'block',fontSize:'11px',fontWeight:600,color:'#475569',marginBottom:'6px'}}>Font Family</label>
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'8px'}}>
-            {([{label:'Sans-Serif',value:"'Inter','Segoe UI',sans-serif"},{label:'Serif',value:"Georgia,'Times New Roman',serif"},{label:'Monospace',value:"'Courier New',monospace"},{label:'Narrow',value:"'Arial Narrow',Impact,sans-serif"}] as const).map(f=>{
-              const active=(field.fontFamily||"'Inter','Segoe UI',sans-serif").includes(f.value.split(',')[0]);
+            {([
+                {label:'Sans-Serif', value:"'Inter','Segoe UI',sans-serif"},
+                {label:'Serif',      value:"Georgia,'Times New Roman',serif"},
+                {label:'Monospace',  value:"'Courier New',monospace"},
+                {label:'Narrow',     value:"'Arial Narrow',Impact,sans-serif"},
+                {label:'BankGothic', value:"'Bebas Neue','Rajdhani',Impact,sans-serif"},
+                {label:'Orbitron',   value:"'Orbitron','Rajdhani',sans-serif"},
+              ] as const).map(f=>{
+              const active=(field.fontFamily||"'Orbitron','Rajdhani',sans-serif").includes(f.value.split(',')[0]);
               return <button key={f.value} onClick={()=>onUpdate(field.id,{fontFamily:f.value})} style={{padding:'8px 4px',borderRadius:'8px',border:active?'1px solid #667eea':'1px solid #e2e8f0',background:active?'#667eea10':'#fff',color:active?'#667eea':'#64748b',cursor:'pointer',fontSize:'11px',fontWeight:active?600:400,fontFamily:f.value,textAlign:'center'}}>{f.label}</button>;
             })}
           </div>
@@ -322,15 +329,18 @@ export default function TemplateManager({ editingTemplate }: TemplateManagerProp
   const [front, setFront] = React.useState<IDSide>(
     editingTemplate?.front ?? {
       background:null, fields: defaultFrontFields,
-      photoX:50, photoY:30, photoW:55, photoH:38, showPhoto:true,
-      sigX:50,   sigY:74,  sigW:40,  sigH:8,   showSig:true,
+      photoX:50, photoY:48, photoW:70, photoH:44, showPhoto:true,
+      sigX:35,   sigY:86,  sigW:40,  sigH:8,   showSig:true,
     }
   );
   const [back, setBack] = React.useState<IDSide>(
     editingTemplate?.back ?? {
       background:null, fields: defaultBackFields,
-      photoX:50, photoY:30, photoW:55, photoH:38, showPhoto:false,
-      sigX:50,   sigY:74,  sigW:40,  sigH:8,   showSig:false,
+      photoX:50, photoY:48, photoW:70, photoH:50, showPhoto:false,
+      sigX:35,   sigY:85,  sigW:40,  sigH:8,   showSig:false,
+      showQR:true, qrX:50, qrY:42, qrSize:70,
+      qrUrl:'https://employee.avegabros.com/verify/',
+      qrFg:'#000000', qrBg:'#ffffff',
     }
   );
 
@@ -441,7 +451,10 @@ export default function TemplateManager({ editingTemplate }: TemplateManagerProp
   const employeeSig: string | null = null; // Templates use placeholder
   const DUMMY_PHOTO = 'data:image/svg+xml;base64,' + btoa(`<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect width="100" height="100" fill="#cbd5e1"/><circle cx="50" cy="38" r="18" fill="#94a3b8"/><ellipse cx="50" cy="80" rx="28" ry="20" fill="#94a3b8"/><text x="50" y="58" text-anchor="middle" fill="#64748b" font-size="10" font-family="sans-serif">PHOTO</text></svg>`);
   const DUMMY_SIG = 'data:image/svg+xml;base64,' + btoa(`<svg xmlns="http://www.w3.org/2000/svg" width="200" height="60" viewBox="0 0 200 60"><rect width="200" height="60" fill="transparent"/><path d="M10 40 Q30 10 50 35 Q70 55 90 25 Q110 5 130 30 Q150 50 170 20 Q185 5 195 25" stroke="#94a3b8" stroke-width="3" fill="none" stroke-linecap="round"/><text x="100" y="55" text-anchor="middle" fill="#94a3b8" font-size="9" font-family="sans-serif">SIGNATURE</text></svg>`);
+  const DUMMY_QR = 'data:image/svg+xml;base64,' + btoa(`<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect width="100" height="100" fill="#ffffff"/><rect x="5" y="5" width="35" height="35" fill="none" stroke="#000" stroke-width="4"/><rect x="13" y="13" width="19" height="19" fill="#000"/><rect x="60" y="5" width="35" height="35" fill="none" stroke="#000" stroke-width="4"/><rect x="68" y="13" width="19" height="19" fill="#000"/><rect x="5" y="60" width="35" height="35" fill="none" stroke="#000" stroke-width="4"/><rect x="13" y="68" width="19" height="19" fill="#000"/><rect x="60" y="60" width="8" height="8" fill="#000"/><rect x="72" y="60" width="8" height="8" fill="#000"/><rect x="84" y="60" width="8" height="8" fill="#000"/><rect x="60" y="72" width="8" height="8" fill="#000"/><rect x="84" y="72" width="8" height="8" fill="#000"/><rect x="60" y="84" width="8" height="8" fill="#000"/><rect x="72" y="84" width="8" height="8" fill="#000"/><rect x="84" y="84" width="8" height="8" fill="#000"/><text x="50" y="54" text-anchor="middle" fill="#94a3b8" font-size="7" font-family="sans-serif">QR CODE</text></svg>`);
 
+  // QR layer selection state
+  const [selectedQR, setSelectedQR] = React.useState(false);
   const handleFieldMouseDown = (e:React.MouseEvent, fieldId:string) => {
     if (isMobile) setMobileTab('props');
     e.stopPropagation(); e.preventDefault();
@@ -850,6 +863,25 @@ export default function TemplateManager({ editingTemplate }: TemplateManagerProp
             </div>
           )}
 
+          {/* QR Code layer — shown on back side */}
+          {which==='back' && sd.showQR && (
+            <div
+              onMouseDown={e=>{ e.stopPropagation(); if(isActive){setSelectedQR(true);setSelectedFieldId(null);setSelectedLayer(null);}else setActiveSide(which); }}
+              style={{
+                position:'absolute',
+                left:`${(sd.qrX??50)}%`, top:`${(sd.qrY??42)}%`,
+                width:`${(sd.qrSize??70)}%`,
+                aspectRatio:'1/1',
+                transform:'translate(-50%,-50%)',
+                cursor:isActive?'grab':'pointer',
+                zIndex:11,
+                outline:(isActive&&selectedQR)?'2px dashed rgba(234,179,8,0.9)':'2px solid transparent',
+                outlineOffset:'3px', borderRadius:'4px',
+              }}>
+              <img src={DUMMY_QR} style={{width:'100%',height:'100%',objectFit:'contain',display:'block',pointerEvents:'none'}}/>
+            </div>
+          )}
+
           {sd.fields.filter((f:IDField)=>f.visible).map((field:IDField)=>{
             const isSel  = isActive&&selectedFieldId===field.id;
             const isDrag = draggingId===field.id;
@@ -1013,22 +1045,27 @@ export default function TemplateManager({ editingTemplate }: TemplateManagerProp
             <AccSection id="fields" icon={<Layers size={16}/>} title="Layers & Fields" open={openSection==="fields"} onToggle={toggleSection}>
               {/* Special Layers */}
               {activeSide==='front' && (
-                <button onClick={()=>setSelectedLayer('photo')} style={{display:'flex',alignItems:'center',gap:'12px',padding:'12px',borderRadius:'8px',border:selectedLayer==='photo'?'1px solid #3b82f6':'1px solid #e2e8f0',background:selectedLayer==='photo'?'#eff6ff':'#fff',cursor:'pointer',textAlign:'left',transition:'all 0.1s',boxShadow:selectedLayer==='photo'?'0 2px 6px rgba(59,130,246,0.15)':'0 1px 2px rgba(0,0,0,0.02)',marginBottom:'8px'}}>
+                <button onClick={()=>{setSelectedLayer('photo'); setSelectedQR(false);}} style={{display:'flex',alignItems:'center',gap:'12px',padding:'12px',borderRadius:'8px',border:selectedLayer==='photo'?'1px solid #3b82f6':'1px solid #e2e8f0',background:selectedLayer==='photo'?'#eff6ff':'#fff',cursor:'pointer',textAlign:'left',transition:'all 0.1s',boxShadow:selectedLayer==='photo'?'0 2px 6px rgba(59,130,246,0.15)':'0 1px 2px rgba(0,0,0,0.02)',marginBottom:'8px'}}>
                   <div style={{background:'#e0e7ff',color:'#4f46e5',padding:'6px',borderRadius:'6px'}}><ImageIcon size={14}/></div>
                   <div style={{flex:1}}><div style={{fontSize:'12px',fontWeight:700,color:selectedLayer==='photo'?'#2563eb':'#0f172a'}}>Employee Photo</div><div style={{fontSize:'11px',color:'#64748b',marginTop:'2px'}}>{side.showPhoto?'Visible':'Hidden'}</div></div>
                 </button>
               )}
-              <button onClick={()=>setSelectedLayer('sig')} style={{display:'flex',alignItems:'center',gap:'12px',padding:'12px',borderRadius:'8px',border:selectedLayer==='sig'?'1px solid #8b5cf6':'1px solid #e2e8f0',background:selectedLayer==='sig'?'#f3e8ff':'#fff',cursor:'pointer',textAlign:'left',transition:'all 0.1s',boxShadow:selectedLayer==='sig'?'0 2px 6px rgba(139,92,246,0.15)':'0 1px 2px rgba(0,0,0,0.02)',marginBottom:'16px'}}>
+              <button onClick={()=>{setSelectedLayer('sig'); setSelectedQR(false);}} style={{display:'flex',alignItems:'center',gap:'12px',padding:'12px',borderRadius:'8px',border:selectedLayer==='sig'?'1px solid #8b5cf6':'1px solid #e2e8f0',background:selectedLayer==='sig'?'#f3e8ff':'#fff',cursor:'pointer',textAlign:'left',transition:'all 0.1s',boxShadow:selectedLayer==='sig'?'0 2px 6px rgba(139,92,246,0.15)':'0 1px 2px rgba(0,0,0,0.02)',marginBottom:'8px'}}>
                 <div style={{background:'#ede9fe',color:'#7c3aed',padding:'6px',borderRadius:'6px'}}><Settings size={14}/></div>
-                <div style={{flex:1}}><div style={{fontSize:'12px',fontWeight:700,color:selectedLayer==='sig'?'#7c3aed':'#0f172a'}}>Signature Layer</div><div style={{fontSize:'11px',color:'#64748b',marginTop:'2px'}}>{side.showSig?'Visible':'Hidden'}</div></div>
+                <div style={{flex:1}}><div style={{fontSize:'12px',fontWeight:700,color:selectedLayer==='sig'?'#7c3aed':'#0f172a'}}>Signature</div><div style={{fontSize:'11px',color:'#64748b',marginTop:'2px'}}>{side.showSig?'Visible':'Hidden'}</div></div>
               </button>
-
+              {/* QR Code layer - always shown (back side) */}
+              <button onClick={()=>{setSelectedQR(true);setSelectedFieldId(null);setSelectedLayer(null);}}
+                style={{display:'flex',alignItems:'center',gap:'12px',padding:'12px',borderRadius:'8px',border:selectedQR?'1px solid #eab308':'1px solid #e2e8f0',background:selectedQR?'#fefce8':'#fff',cursor:'pointer',textAlign:'left',transition:'all 0.1s',boxShadow:selectedQR?'0 2px 6px rgba(234,179,8,0.2)':'0 1px 2px rgba(0,0,0,0.02)',marginBottom:'16px'}}>
+                <div style={{background:'#fef9c3',color:'#a16207',padding:'6px',borderRadius:'6px',fontSize:'13px',lineHeight:1,display:'flex',alignItems:'center',justifyContent:'center',width:'26px',height:'26px'}}>▦</div>
+                <div style={{flex:1}}><div style={{fontSize:'12px',fontWeight:700,color:selectedQR?'#a16207':'#0f172a'}}>QR Code</div><div style={{fontSize:'11px',color:'#64748b',marginTop:'2px'}}>{(activeSide==='back'&&side.showQR)?'Visible (Back)':'Back side only'}</div></div>
+              </button>
               <div style={{height:'1px',background:'#f1f5f9',margin:'0 -20px 16px'}}/>
               
               <div style={{fontSize:'11px',fontWeight:700,color:'#94a3b8',textTransform:'uppercase',letterSpacing:'1px',marginBottom:'10px'}}>Text Elements</div>
               <div style={{display:'flex',flexDirection:'column',gap:'6px'}}>
                 {side.fields.map((field:IDField)=>(
-                  <button key={field.id} onClick={()=>setSelectedFieldId(field.id)}
+                  <button key={field.id} onClick={()=>{setSelectedFieldId(field.id); setSelectedQR(false);}}
                     style={{display:'flex',alignItems:'center',gap:'10px',padding:'10px 12px',borderRadius:'8px',border:selectedFieldId===field.id?'1px solid #ec4899':'1px solid #e2e8f0',background:selectedFieldId===field.id?'#fdf2f8':'#fff',cursor:'pointer',textAlign:'left',transition:'all 0.1s',boxShadow:selectedFieldId===field.id?'0 2px 6px rgba(236,72,153,0.15)':'0 1px 2px rgba(0,0,0,0.02)'}}>
                     <div style={{width:'12px',height:'12px',borderRadius:'4px',background:field.color,border:'1px solid rgba(0,0,0,0.1)',flexShrink:0}}></div>
                     <div style={{flex:1,minWidth:0}}>
@@ -1104,11 +1141,11 @@ export default function TemplateManager({ editingTemplate }: TemplateManagerProp
             <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
               <Settings size={16} color="#64748b"/>
               <span style={{fontWeight:700,fontSize:'13px',color:'#0f172a'}}>
-                {selectedLayer ? (selectedLayer==='photo'?'Photo Settings':'Signature Settings') : selectedField ? 'Text Properties' : 'Design Properties'}
+                {selectedLayer ? (selectedLayer==='photo'?'Photo Settings':'Signature Settings') : selectedQR ? 'QR Code Settings' : selectedField ? 'Text Properties' : 'Design Properties'}
               </span>
             </div>
-            {(selectedLayer || selectedField) && (
-              <button onClick={()=>{setSelectedLayer(null); setSelectedFieldId(null);}} style={{background:'#fff',border:'1px solid #e2e8f0',borderRadius:'6px',padding:'4px',color:'#64748b',cursor:'pointer',boxShadow:'0 1px 2px rgba(0,0,0,0.02)'}}><X size={14}/></button>
+            {(selectedLayer || selectedField || selectedQR) && (
+              <button onClick={()=>{setSelectedLayer(null); setSelectedFieldId(null); setSelectedQR(false);}} style={{background:'#fff',border:'1px solid #e2e8f0',borderRadius:'6px',padding:'4px',color:'#64748b',cursor:'pointer',boxShadow:'0 1px 2px rgba(0,0,0,0.02)'}}><X size={14}/></button>
             )}
           </div>
           
@@ -1116,6 +1153,41 @@ export default function TemplateManager({ editingTemplate }: TemplateManagerProp
           <div style={{flex:1,overflowY:'auto'}}>
             {selectedLayer ? (
               <LayerEditor layer={selectedLayer} side={side} onUpdate={updateSideProps}/>
+            ) : selectedQR ? (
+              <div style={{padding:'20px',display:'flex',flexDirection:'column',gap:'16px'}}>
+                <div style={{background:'#fefce8',border:'1px solid #fde68a',borderRadius:'12px',padding:'16px',display:'flex',flexDirection:'column',gap:'12px'}}>
+                  <div style={{fontSize:'11px',fontWeight:700,color:'#92400e',textTransform:'uppercase',letterSpacing:'1px'}}>QR Code Settings</div>
+                  <label style={{display:'flex',alignItems:'center',gap:'10px',padding:'10px 14px',background:back.showQR?'#10b98115':'#ef444415',border:`1px solid ${back.showQR?'#10b981':'#ef4444'}`,borderRadius:'8px',cursor:'pointer'}}>
+                    <input type="checkbox" checked={!!back.showQR} onChange={e=>setBack((p:IDSide)=>({...p,showQR:e.target.checked}))} style={{accentColor:back.showQR?'#10b981':'#ef4444',width:'18px',height:'18px'}}/>
+                    <span style={{fontSize:'13px',fontWeight:600,color:back.showQR?'#059669':'#dc2626'}}>{back.showQR?'QR Visible on Back':'QR Hidden'}</span>
+                  </label>
+                </div>
+                <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:'12px',padding:'16px',display:'flex',flexDirection:'column',gap:'10px'}}>
+                  <div style={{fontSize:'11px',fontWeight:700,color:'#94a3b8',textTransform:'uppercase',letterSpacing:'1px'}}>Position & Size</div>
+                  {([['X %','qrX',back.qrX??50],['Y %','qrY',back.qrY??42],['Size %','qrSize',back.qrSize??70]] as [string,string,number][]).map(([l,k,v])=>(
+                    <div key={k} style={{display:'flex',alignItems:'center',gap:'8px'}}>
+                      <label style={{fontSize:'11px',color:'#64748b',minWidth:'52px',fontWeight:500}}>{l}</label>
+                      <input type="range" min={5} max={100} value={v} onChange={e=>setBack((p:IDSide)=>({...p,[k]:Number(e.target.value)}))} style={{flex:1,accentColor:'#eab308'}}/>
+                      <span style={{fontSize:'12px',fontWeight:600,color:'#0f172a',minWidth:'34px',textAlign:'right'}}>{v}%</span>
+                    </div>
+                  ))}
+                </div>
+                <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:'12px',padding:'16px',display:'flex',flexDirection:'column',gap:'10px'}}>
+                  <div style={{fontSize:'11px',fontWeight:700,color:'#94a3b8',textTransform:'uppercase',letterSpacing:'1px'}}>Verification URL</div>
+                  <input type="text" value={back.qrUrl||''} onChange={e=>setBack((p:IDSide)=>({...p,qrUrl:e.target.value}))} placeholder="https://..." style={{...inpStyle,fontSize:'12px',fontFamily:'monospace'}}/>
+                  <p style={{margin:0,fontSize:'11px',color:'#94a3b8'}}>Employee ID will be appended automatically.</p>
+                </div>
+                <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:'12px',padding:'16px',display:'flex',flexDirection:'column',gap:'10px'}}>
+                  <div style={{fontSize:'11px',fontWeight:700,color:'#94a3b8',textTransform:'uppercase',letterSpacing:'1px'}}>Colors</div>
+                  {([['Foreground','qrFg',back.qrFg||'#000000'],['Background','qrBg',back.qrBg||'#ffffff']] as [string,string,string][]).map(([l,k,v])=>(
+                    <div key={k} style={{display:'flex',alignItems:'center',gap:'8px'}}>
+                      <label style={{fontSize:'11px',color:'#64748b',minWidth:'64px',fontWeight:500}}>{l}</label>
+                      <input type="color" value={v} onChange={e=>setBack((p:IDSide)=>({...p,[k]:e.target.value}))} style={{width:'36px',height:'30px',border:'1px solid #e2e8f0',borderRadius:'6px',cursor:'pointer',padding:'2px',background:'#fff'}}/>
+                      <input type="text" value={v} onChange={e=>setBack((p:IDSide)=>({...p,[k]:e.target.value}))} style={{flex:1,background:'#fff',border:'1px solid #e2e8f0',borderRadius:'6px',padding:'6px 10px',fontSize:'12px',fontFamily:'monospace',outline:'none',color:'#0f172a'}}/>
+                    </div>
+                  ))}
+                </div>
+              </div>
             ) : selectedField ? (
               <FieldEditor field={selectedField} onUpdate={updateField}/>
             ) : (
