@@ -208,9 +208,15 @@ app.get('/api/verify/:empCode', async (req, res) => {
 
     if (!emp) return res.status(404).json({ found: false, status: 'NOT FOUND' });
 
-    const isActive = ['active', '1', 'yes', true].includes(
-      (emp.status ?? emp.employment_status ?? emp.active ?? '').toString().toLowerCase()
-    );
+    const ACTIVE_EMPLOYMENT_STATUSES = [
+      'probationary',
+      'regular',
+      'casual',
+      'fixed term',
+      'part-time',
+    ];
+    const employmentStatus = (emp.employee_status ?? '').toString().trim().toLowerCase();
+    const isActive = ACTIVE_EMPLOYMENT_STATUSES.includes(employmentStatus);
 
     res.json({
       found: true,
@@ -221,6 +227,7 @@ app.get('/api/verify/:empCode', async (req, res) => {
       photo: emp.picture || null,
       emergencyPerson: emp.emergency_contact_person || '',
       emergencyNum: emp.emergency_contact_num || '',
+      employmentStatus: emp.employee_status || '',
       status: isActive ? 'ACTIVE' : 'INACTIVE',
       isActive,
     });

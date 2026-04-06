@@ -42,7 +42,7 @@ export default function SavedIDs({ savedIDs, setSavedIDs, onEditInBuilder }: Pro
   const filtered = savedIDs.filter(e =>
     e.employeeName?.toLowerCase().includes(search.toLowerCase()) ||
     e.position?.toLowerCase().includes(search.toLowerCase())
-  );
+  ).slice().reverse();
 
   const handleDelete = async (entry: any) => {
     await fetch(`${API_URL}/saved-ids/${entry.id}`, { method: 'DELETE' });
