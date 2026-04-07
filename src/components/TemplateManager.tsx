@@ -1,7 +1,7 @@
 import React from 'react';
-import { Download, Loader2, Upload, Settings, Image as ImageIcon, Save, Printer, RefreshCw, Undo, Redo, Grid, Magnet, X, MousePointer2, LayoutTemplate, Layers, Pencil, Trash2 } from 'lucide-react';
+import { Download, Loader2, Upload, Settings, Image as ImageIcon, Save, Printer, RefreshCw, Undo, Redo, Grid, Magnet, X, MousePointer2, LayoutTemplate, Layers, Pencil, Trash2, ArrowLeft } from 'lucide-react';
 import { API_URL } from '../types';
-import type { IDField, IDSide, IDTemplate } from '../types';
+import type { IDField, IDSide, IDTemplate, ShapeElement } from '../types';
 import { hexToColorFilter, hexToColorFilterWhite } from '../utils';
 
 // ── DEFAULT FIELDS ──
@@ -287,8 +287,9 @@ const FieldEditor = React.memo(({ field, onUpdate }: FieldEditorProps) => {
 // ── MAIN ID BUILDER COMPONENT ──
 interface TemplateManagerProps {
   editingTemplate?: IDTemplate | null;
+  onBack?: () => void;
 }
-export default function TemplateManager({ editingTemplate }: TemplateManagerProps) {
+export default function TemplateManager({ editingTemplate, onBack }: TemplateManagerProps) {
   const CARD_W = 214, CARD_H = 340; // CR80 portrait: 54mm x 85.6mm
 
   // ── core state ──
@@ -305,6 +306,61 @@ export default function TemplateManager({ editingTemplate }: TemplateManagerProp
   const [showGrid, setShowGrid]     = React.useState(false);
   const [snap, setSnap]             = React.useState(true);
 
+  // ── left panel tab ──
+  const [leftTab, setLeftTab] = React.useState<'layers'|'elements'|'background'>('layers');
+
+  // ── shape state ──
+  const [selectedShapeId, setSelectedShapeId] = React.useState<string|null>(null);
+  const [draggingShapeId, setDraggingShapeId] = React.useState<string|null>(null);
+  const [shapeDragOffset, setShapeDragOffset] = React.useState({x:0,y:0});
+  const [resizingShape, setResizingShape] = React.useState<{id:string,handle:string}|null>(null);
+  const [shapeResizeStart, setShapeResizeStart] = React.useState({mouseX:0,mouseY:0,w:0,h:0,x:0,y:0});
+
+  const addShape = (type: ShapeElement['type']) => {
+    const newShape: ShapeElement = {
+      id: `shape_${Date.now()}`,
+      type,
+      x: 50, y: 50,
+      w: type==='line'?60:40,
+      h: type==='line'?4:30,
+      fill: type==='line'?'transparent':'#667eea',
+      fillOpacity: 80,
+      stroke: '#667eea',
+      strokeWidth: type==='line'?3:0,
+      borderRadius: type==='rect'?4:0,
+    };
+    setSide((p:IDSide)=>({...p, shapes:[...(p.shapes||[]),newShape]}));
+    setSelectedShapeId(newShape.id);
+    setSelectedFieldId(null); setSelectedLayer(null); setSelectedQR(false);
+  };
+
+  const addTextBox = () => {
+    const newField: IDField = {
+      id: `text_${Date.now()}`,
+      label: 'Text Box',
+      value: 'Text',
+      x: 50, y: 50,
+      fontSize: 14, color: '#ffffff',
+      bold: false, italic: false, align: 'center', visible: true, w: 80,
+    };
+    setSide((p:IDSide)=>({...p, fields:[...p.fields, newField]}));
+    setSelectedFieldId(newField.id);
+    setSelectedShapeId(null); setSelectedLayer(null); setSelectedQR(false);
+  };
+
+  const updateShape = (id:string, updates:Partial<ShapeElement>) =>
+    setSide((p:IDSide)=>({...p, shapes:(p.shapes||[]).map((s:ShapeElement)=>s.id===id?{...s,...updates}:s)}));
+
+  const deleteShape = (id:string) => {
+    setSide((p:IDSide)=>({...p, shapes:(p.shapes||[]).filter((s:ShapeElement)=>s.id!==id)}));
+    setSelectedShapeId(null);
+  };
+
+  const deleteField = (id:string) => {
+    setSide((p:IDSide)=>({...p, fields:p.fields.filter((f:IDField)=>f.id!==id)}));
+    setSelectedFieldId(null);
+  };
+
   // ── accordion open state ──
   const [openSection, setOpenSection] = React.useState<string>('employee');
   const toggleSection = (s: string) => setOpenSection(p => p === s ? '' : s);
@@ -318,7 +374,7 @@ export default function TemplateManager({ editingTemplate }: TemplateManagerProp
   const [layerDragOffset, setLayerDragOffset] = React.useState({x:0,y:0});
   const [resizingLayer,   setResizingLayer]   = React.useState<{layer:'photo'|'sig', handle:string}|null>(null);
   const [resizeStart,     setResizeStart]     = React.useState({mouseX:0,mouseY:0,w:0,h:0,x:0,y:0});
-  const pendingDrag = React.useRef<{type:'field'|'layer', id:string, startX:number, startY:number, offset:{x:number,y:number}}|null>(null);
+  const pendingDrag = React.useRef<{type:'field'|'layer'|'shape', id:string, startX:number, startY:number, offset:{x:number,y:number}}|null>(null);
   const isDragging  = React.useRef(false);
   const cardFrontRef = React.useRef<HTMLDivElement>(null);
   const cardBackRef  = React.useRef<HTMLDivElement>(null);
@@ -434,6 +490,7 @@ export default function TemplateManager({ editingTemplate }: TemplateManagerProp
   const setSide = activeSide==='front' ? setFront : setBack;
   const activeRef = activeSide==='front' ? cardFrontRef : cardBackRef;
   const selectedField = side.fields.find((f:IDField)=>f.id===selectedFieldId)||null;
+  const selectedShape = (side.shapes||[]).find((s:ShapeElement)=>s.id===selectedShapeId)||null;
 
   const updateField = (id:string, updates:Partial<IDField>) =>
     setSide((p:IDSide)=>({...p, fields:p.fields.map((f:IDField)=>f.id===id?{...f,...updates}:f)}));
@@ -491,6 +548,25 @@ export default function TemplateManager({ editingTemplate }: TemplateManagerProp
     });
   };
 
+  const handleShapeMouseDown = (e:React.MouseEvent, shapeId:string) => {
+    if (isMobile) setMobileTab('props');
+    e.stopPropagation(); e.preventDefault();
+    setSelectedShapeId(shapeId); setSelectedFieldId(null); setSelectedLayer(null); setSelectedQR(false);
+    const rect = activeRef.current!.getBoundingClientRect();
+    const sh = (side.shapes||[]).find((s:ShapeElement)=>s.id===shapeId)!;
+    const offset = { x: e.clientX-rect.left-(sh.x/100*CARD_W*zoom), y: e.clientY-rect.top-(sh.y/100*CARD_H*zoom) };
+    isDragging.current = false;
+    pendingDrag.current = { type:'shape', id:shapeId, startX:e.clientX, startY:e.clientY, offset };
+  };
+
+  const handleShapeResizeMouseDown = (e:React.MouseEvent, shapeId:string, handle:string) => {
+    e.stopPropagation(); e.preventDefault();
+    pendingDrag.current = null;
+    const sh = (side.shapes||[]).find((s:ShapeElement)=>s.id===shapeId)!;
+    setResizingShape({id:shapeId, handle});
+    setShapeResizeStart({mouseX:e.clientX,mouseY:e.clientY,w:sh.w,h:sh.h,x:sh.x,y:sh.y});
+  };
+
   const handleMouseMove = React.useCallback((e:MouseEvent) => {
     const THRESHOLD = 4;
     if(pendingDrag.current && !isDragging.current) {
@@ -500,6 +576,8 @@ export default function TemplateManager({ editingTemplate }: TemplateManagerProp
         isDragging.current = true;
         if(pendingDrag.current.type === 'field') {
           setDraggingId(pendingDrag.current.id); setDragOffset(pendingDrag.current.offset);
+        } else if(pendingDrag.current.type === 'shape') {
+          setDraggingShapeId(pendingDrag.current.id); setShapeDragOffset(pendingDrag.current.offset);
         } else {
           setDraggingLayer(pendingDrag.current.id as 'photo'|'sig'); setLayerDragOffset(pendingDrag.current.offset);
         }
@@ -516,6 +594,15 @@ export default function TemplateManager({ editingTemplate }: TemplateManagerProp
       setSide((p:IDSide)=>({...p, fields:p.fields.map((f:IDField)=>f.id===draggingId?{...f,x,y}:f)}));
       return;
     }
+    if(draggingShapeId && activeRef.current) {
+      const rect = activeRef.current.getBoundingClientRect();
+      let x = (e.clientX-rect.left-shapeDragOffset.x)/zoom/CARD_W*100;
+      let y = (e.clientY-rect.top -shapeDragOffset.y)/zoom/CARD_H*100;
+      if(snap){ x=Math.round(x/5)*5; y=Math.round(y/5)*5; }
+      x=Math.max(0,Math.min(100,x)); y=Math.max(0,Math.min(100,y));
+      setSide((p:IDSide)=>({...p, shapes:(p.shapes||[]).map((s:ShapeElement)=>s.id===draggingShapeId?{...s,x,y}:s)}));
+      return;
+    }
     if(draggingLayer && activeRef.current) {
       const rect = activeRef.current.getBoundingClientRect();
       let x = (e.clientX-rect.left-layerDragOffset.x)/zoom/CARD_W*100;
@@ -524,6 +611,19 @@ export default function TemplateManager({ editingTemplate }: TemplateManagerProp
       x=Math.max(0,Math.min(100,x)); y=Math.max(0,Math.min(100,y));
       const xKey=draggingLayer==='photo'?'photoX':'sigX', yKey=draggingLayer==='photo'?'photoY':'sigY';
       setSide((p:IDSide)=>({...p, [xKey]:x, [yKey]:y}));
+      return;
+    }
+    if(resizingShape && activeRef.current) {
+      const {id, handle} = resizingShape;
+      const dxPx = e.clientX-shapeResizeStart.mouseX, dyPx = e.clientY-shapeResizeStart.mouseY;
+      const dx = dxPx/zoom/CARD_W*100, dy = dyPx/zoom/CARD_H*100;
+      let w=shapeResizeStart.w, h=shapeResizeStart.h;
+      if(handle.includes('e')) w = Math.max(5, shapeResizeStart.w + dx*2);
+      if(handle.includes('w')) w = Math.max(5, shapeResizeStart.w - dx*2);
+      if(handle.includes('s')) h = Math.max(5, shapeResizeStart.h + dy*2);
+      if(handle.includes('n')) h = Math.max(5, shapeResizeStart.h - dy*2);
+      if(snap){ w=Math.round(w/5)*5; h=Math.round(h/5)*5; }
+      setSide((p:IDSide)=>({...p, shapes:(p.shapes||[]).map((s:ShapeElement)=>s.id===id?{...s,w,h}:s)}));
       return;
     }
     if(resizingLayer && activeRef.current) {
@@ -540,17 +640,17 @@ export default function TemplateManager({ editingTemplate }: TemplateManagerProp
       if(snap){ w=Math.round(w/5)*5; h=Math.round(h/5)*5; }
       setSide((p:IDSide)=>({...p, [wKey]:w, [hKey]:h, [xKey]:x, [yKey]:y}));
     }
-  },[draggingId,draggingLayer,resizingLayer,dragOffset,layerDragOffset,resizeStart,zoom,activeSide,snap]);
+  },[draggingId,draggingShapeId,draggingLayer,resizingLayer,resizingShape,dragOffset,shapeDragOffset,layerDragOffset,resizeStart,shapeResizeStart,zoom,activeSide,snap]);
 
   const handleMouseUp = React.useCallback(()=>{
     const wasDragging = isDragging.current;
     pendingDrag.current = null;
     isDragging.current  = false;
-    if(draggingId||draggingLayer||resizingLayer||wasDragging){
-      setDraggingId(null); setDraggingLayer(null); setResizingLayer(null);
+    if(draggingId||draggingShapeId||draggingLayer||resizingLayer||resizingShape||wasDragging){
+      setDraggingId(null); setDraggingShapeId(null); setDraggingLayer(null); setResizingLayer(null); setResizingShape(null);
       if(wasDragging) pushHistory(front,back);
     }
-  },[draggingId,draggingLayer,resizingLayer,front,back,pushHistory]);
+  },[draggingId,draggingShapeId,draggingLayer,resizingLayer,resizingShape,front,back,pushHistory]);
 
   React.useEffect(()=>{
     window.addEventListener('mousemove',handleMouseMove);
@@ -605,11 +705,56 @@ export default function TemplateManager({ editingTemplate }: TemplateManagerProp
         const sx = (CARD_W - sw)/2, sy = (CARD_H - sh)/2;
         ctx.drawImage(img, sx, sy, sw, sh);
       } catch { ctx.fillStyle='#cc0000'; ctx.fillRect(0,0,CARD_W,CARD_H); }
+    } else if (sd.bgGradient) {
+      const g = sd.bgGradient;
+      let grd: CanvasGradient;
+      if (g.type==='radial') {
+        grd = ctx.createRadialGradient(CARD_W/2,CARD_H/2,0,CARD_W/2,CARD_H/2,Math.max(CARD_W,CARD_H)/2);
+      } else {
+        const rad = ((g.angle??135)*Math.PI)/180;
+        const cx2=CARD_W/2, cy2=CARD_H/2;
+        const len=Math.sqrt(CARD_W*CARD_W+CARD_H*CARD_H)/2;
+        grd = ctx.createLinearGradient(cx2-Math.cos(rad)*len,cy2-Math.sin(rad)*len,cx2+Math.cos(rad)*len,cy2+Math.sin(rad)*len);
+      }
+      grd.addColorStop(0,g.color1); grd.addColorStop(1,g.color2);
+      ctx.fillStyle=grd; ctx.fillRect(0,0,CARD_W,CARD_H);
+    } else if (sd.bgColor) {
+      ctx.fillStyle=sd.bgColor; ctx.fillRect(0,0,CARD_W,CARD_H);
     } else {
       const grd = ctx.createLinearGradient(0,0,CARD_W*0.7,CARD_H);
       if(which==='front'){ grd.addColorStop(0,'#b91c1c'); grd.addColorStop(0.6,'#ef4444'); grd.addColorStop(1,'#f97316'); }
       else { grd.addColorStop(0,'#f1f5f9'); grd.addColorStop(1,'#e2e8f0'); }
       ctx.fillStyle=grd; ctx.fillRect(0,0,CARD_W,CARD_H);
+    }
+
+    // Draw shapes
+    for (const sh of (sd.shapes||[])) {
+      const sx2 = sh.x/100*CARD_W - sh.w/100*CARD_W/2;
+      const sy2 = sh.y/100*CARD_H - sh.h/100*CARD_H/2;
+      const sw2 = sh.w/100*CARD_W;
+      const sh2 = sh.h/100*CARD_H;
+      ctx.save();
+      ctx.globalAlpha = sh.fillOpacity/100;
+      if (sh.type==='circle') {
+        ctx.beginPath();
+        ctx.ellipse(sx2+sw2/2, sy2+sh2/2, sw2/2, sh2/2, 0, 0, Math.PI*2);
+        if (sh.fill!=='transparent') { ctx.fillStyle=sh.fill; ctx.fill(); }
+        if (sh.strokeWidth>0) { ctx.globalAlpha=1; ctx.strokeStyle=sh.stroke; ctx.lineWidth=sh.strokeWidth; ctx.stroke(); }
+      } else if (sh.type==='line') {
+        ctx.beginPath();
+        ctx.moveTo(sx2, sy2+sh2/2); ctx.lineTo(sx2+sw2, sy2+sh2/2);
+        ctx.globalAlpha=1; ctx.strokeStyle=sh.stroke; ctx.lineWidth=Math.max(1,sh.strokeWidth||3); ctx.stroke();
+      } else {
+        const r = sh.borderRadius||0;
+        ctx.beginPath();
+        ctx.moveTo(sx2+r,sy2); ctx.lineTo(sx2+sw2-r,sy2); ctx.quadraticCurveTo(sx2+sw2,sy2,sx2+sw2,sy2+r);
+        ctx.lineTo(sx2+sw2,sy2+sh2-r); ctx.quadraticCurveTo(sx2+sw2,sy2+sh2,sx2+sw2-r,sy2+sh2);
+        ctx.lineTo(sx2+r,sy2+sh2); ctx.quadraticCurveTo(sx2,sy2+sh2,sx2,sy2+sh2-r);
+        ctx.lineTo(sx2,sy2+r); ctx.quadraticCurveTo(sx2,sy2,sx2+r,sy2); ctx.closePath();
+        if (sh.fill!=='transparent') { ctx.fillStyle=sh.fill; ctx.fill(); }
+        if (sh.strokeWidth>0) { ctx.globalAlpha=1; ctx.strokeStyle=sh.stroke; ctx.lineWidth=sh.strokeWidth; ctx.stroke(); }
+      }
+      ctx.restore();
     }
 
     const photo = which==='front' ? employeePhoto : null;
@@ -807,7 +952,13 @@ export default function TemplateManager({ editingTemplate }: TemplateManagerProp
 
           {sd.background
             ? <img src={sd.background} style={{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'cover',pointerEvents:'none'}}/>
-            : <div style={{position:'absolute',inset:0,background:which==='front'?'linear-gradient(160deg,#b91c1c,#ef4444,#f97316)':'linear-gradient(160deg,#f1f5f9,#e2e8f0)',pointerEvents:'none'}}/>}
+            : sd.bgGradient
+              ? <div style={{position:'absolute',inset:0,background:sd.bgGradient.type==='radial'
+                  ?`radial-gradient(circle, ${sd.bgGradient.color1}, ${sd.bgGradient.color2})`
+                  :`linear-gradient(${sd.bgGradient.angle??135}deg, ${sd.bgGradient.color1}, ${sd.bgGradient.color2})`,pointerEvents:'none'}}/>
+              : sd.bgColor
+                ? <div style={{position:'absolute',inset:0,background:sd.bgColor,pointerEvents:'none'}}/>
+                : <div style={{position:'absolute',inset:0,background:which==='front'?'linear-gradient(160deg,#b91c1c,#ef4444,#f97316)':'linear-gradient(160deg,#f1f5f9,#e2e8f0)',pointerEvents:'none'}}/>}
 
           {showGrid&&isActive&&<div style={{position:'absolute',inset:0,backgroundImage:`linear-gradient(rgba(0,0,0,0.1) 1px,transparent 1px),linear-gradient(90deg,rgba(0,0,0,0.1) 1px,transparent 1px)`,backgroundSize:`${CARD_W*zoom/10}px ${CARD_H*zoom/10}px`,pointerEvents:'none',zIndex:5}}/>}
 
@@ -882,6 +1033,40 @@ export default function TemplateManager({ editingTemplate }: TemplateManagerProp
             </div>
           )}
 
+          {/* Shape layers */}
+          {(sd.shapes||[]).map((sh:ShapeElement) => {
+            const isSel = isActive && selectedShapeId===sh.id;
+            const isDragSh = draggingShapeId===sh.id;
+            const borderRadius = sh.type==='circle'?'50%':`${sh.borderRadius||0}px`;
+            return (
+              <div key={sh.id}
+                onMouseDown={e=>{e.stopPropagation(); if(isActive){handleShapeMouseDown(e,sh.id);}else{setActiveSide(which);setSelectedShapeId(sh.id);setSelectedFieldId(null);setSelectedLayer(null);}}}
+                style={{
+                  position:'absolute',
+                  left:`${sh.x}%`, top:`${sh.y}%`,
+                  width:`${sh.w}%`, height:sh.type==='line'?`${sh.h}%`:`${sh.h}%`,
+                  transform:'translate(-50%,-50%)',
+                  background: sh.type==='line'?'transparent':`${sh.fill}${Math.round((sh.fillOpacity/100)*255).toString(16).padStart(2,'0')}`,
+                  border: sh.strokeWidth>0?`${sh.strokeWidth}px solid ${sh.stroke}`:(sh.type==='line'?`${Math.max(2,sh.strokeWidth||3)}px solid ${sh.stroke}`:'none'),
+                  borderRadius,
+                  cursor: isActive?(isDragSh?'grabbing':'grab'):'pointer',
+                  zIndex:6,
+                  outline: isSel?'2px dashed rgba(102,126,234,0.9)':'none',
+                  outlineOffset:'3px',
+                  transition: isDragSh?'none':'all 0.1s',
+                  boxSizing:'border-box',
+                }}>
+                {isSel && (['n','s','e','w','ne','nw','se','sw'] as const).map(h => {
+                  const top  = h.includes('n')?'-4px':h.includes('s')?'calc(100% - 4px)':'calc(50% - 4px)';
+                  const left = h.includes('w')?'-4px':h.includes('e')?'calc(100% - 4px)':'calc(50% - 4px)';
+                  const cur  = h==='n'||h==='s'?'ns-resize':h==='e'||h==='w'?'ew-resize':h==='ne'||h==='sw'?'nesw-resize':'nwse-resize';
+                  return <div key={h} onMouseDown={e=>handleShapeResizeMouseDown(e,sh.id,h)}
+                    style={{position:'absolute',top,left,width:'8px',height:'8px',borderRadius:'50%',background:'#fff',border:'2px solid #667eea',zIndex:20,cursor:cur}}/>;
+                })}
+              </div>
+            );
+          })}
+
           {sd.fields.filter((f:IDField)=>f.visible).map((field:IDField)=>{
             const isSel  = isActive&&selectedFieldId===field.id;
             const isDrag = draggingId===field.id;
@@ -936,6 +1121,13 @@ export default function TemplateManager({ editingTemplate }: TemplateManagerProp
         {/* Brand & History */}
         <div style={{display:'flex',alignItems:'center',gap:'24px'}}>
           <div style={{display:'flex',alignItems:'center',gap:'12px'}}>
+            {onBack && (
+              <button onClick={onBack} style={{display:'flex',alignItems:'center',gap:'6px',padding:'7px 12px',borderRadius:'8px',border:'1px solid #e2e8f0',background:'#fff',color:'#475569',cursor:'pointer',fontSize:'13px',fontWeight:600,boxShadow:'0 1px 2px rgba(0,0,0,0.04)',transition:'all 0.15s',flexShrink:0}}
+                onMouseEnter={e=>(e.currentTarget as HTMLElement).style.background='#f8fafc'}
+                onMouseLeave={e=>(e.currentTarget as HTMLElement).style.background='#fff'}>
+                <ArrowLeft size={14}/> {!isMobile && 'Back'}
+              </button>
+            )}
             <div style={{background:'linear-gradient(135deg,#ec4899,#be185d)',padding:'8px',borderRadius:'10px',boxShadow:'0 4px 10px rgba(236,72,153,0.3)'}}><LayoutTemplate size={18} color="#fff"/></div>
             <div>
               <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
@@ -1005,88 +1197,251 @@ export default function TemplateManager({ editingTemplate }: TemplateManagerProp
 
       <div style={{display:'flex',flex:1,overflow:'hidden'}}>
         
-        {/* ════════════════════════════════════ LEFT PANEL (Assets & Layers) ══ */}
+        {/* ════════════════════════════════════ LEFT PANEL (Canva-style) ══ */}
         <div style={{width:isMobile?'100%':'300px',flexShrink:0,background:'#fff',borderRight:isMobile?'none':'1px solid #e2e8f0',display:isMobile?(mobileTab==='layers'?'flex':'none'):'flex',flexDirection:'column',overflow:'hidden',boxShadow:isMobile?'none':'4px 0 24px rgba(0,0,0,0.02)',zIndex:10}}>
-          <div style={{padding:'20px 20px 10px',background:'#f8fafc',borderBottom:'1px solid #e2e8f0'}}>
-            <SegmentedControl options={[{label:'Front Card',value:'front'},{label:'Back Card',value:'back'}]} value={activeSide} onChange={(v:any)=>{setActiveSide(v);setSelectedFieldId(null);setSelectedLayer(null);}}/>
+          {/* Side switcher */}
+          <div style={{padding:'12px 16px 10px',background:'#f8fafc',borderBottom:'1px solid #e2e8f0'}}>
+            <SegmentedControl options={[{label:'Front Card',value:'front'},{label:'Back Card',value:'back'}]} value={activeSide} onChange={(v:any)=>{setActiveSide(v);setSelectedFieldId(null);setSelectedLayer(null);setSelectedShapeId(null);}}/>
+          </div>
+          {/* Canva-style tab bar */}
+          <div style={{display:'flex',borderBottom:'1px solid #e2e8f0',background:'#fff',flexShrink:0}}>
+            {([
+              {id:'layers',     label:'Layers',     icon:'☰'},
+              {id:'elements',   label:'Elements',   icon:'✦'},
+              {id:'background', label:'Background', icon:'🎨'},
+            ] as const).map(tab=>(
+              <button key={tab.id} onClick={()=>setLeftTab(tab.id)}
+                style={{flex:1,padding:'10px 4px',border:'none',background:'transparent',cursor:'pointer',fontSize:'11px',fontWeight:leftTab===tab.id?700:400,color:leftTab===tab.id?'#667eea':'#94a3b8',borderBottom:leftTab===tab.id?'2px solid #667eea':'2px solid transparent',display:'flex',flexDirection:'column',alignItems:'center',gap:'3px',transition:'all 0.15s'}}>
+                <span style={{fontSize:'15px'}}>{tab.icon}</span>{tab.label}
+              </button>
+            ))}
           </div>
           <div style={{flex:1,overflowY:'auto'}}>
-            <AccSection id="employee" icon={<Save size={16}/>} title="Template Info" open={openSection==="employee"} onToggle={toggleSection}>
-              <p style={{margin:'0 0 8px',fontSize:'11px',color:'#64748b'}}>Name your template before saving.</p>
-              <input type="text" value={templateName} onChange={e=>setTemplateName(e.target.value)} placeholder="Template name (e.g. LMVC Corp)" style={{...inpStyle,marginBottom:'8px'}}/>
-              <input type="text" value={templateCompany} onChange={e=>setTemplateCompany(e.target.value)} placeholder="Company (optional)" style={{...inpStyle,marginBottom:'12px'}}/>
-              <button onClick={saveAsTemplate} disabled={savingTemplate||!templateName.trim()}
-                style={{width:'100%',background:templateName.trim()?'linear-gradient(135deg,#10b981,#059669)':'#f1f5f9',color:templateName.trim()?'#fff':'#94a3b8',border:'none',borderRadius:'8px',padding:'10px',cursor:templateName.trim()?'pointer':'not-allowed',fontSize:'13px',fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',gap:'8px'}}>
-                {savingTemplate?<Loader2 size={14} style={{animation:'spin 1s linear infinite'}}/>:<Save size={14}/>} Save Template
-              </button>
-            </AccSection>
 
-            <AccSection id="background" icon={<ImageIcon size={16}/>} title="Background" open={openSection==="background"} onToggle={toggleSection}>
-              <label style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:'10px',border:'1.5px dashed #cbd5e1',borderRadius:'10px',padding:'24px',cursor:'pointer',background:'#f8fafc',transition:'all 0.2s'}}
-                onMouseEnter={e=>{ (e.currentTarget as HTMLElement).style.borderColor='#667eea'; (e.currentTarget as HTMLElement).style.background='#eff6ff'; }} onMouseLeave={e=>{ (e.currentTarget as HTMLElement).style.borderColor='#cbd5e1'; (e.currentTarget as HTMLElement).style.background='#f8fafc'; }}>
-                <div style={{background:'#fff',padding:'10px',borderRadius:'50%',boxShadow:'0 2px 8px rgba(0,0,0,0.05)'}}><Upload size={18} color="#667eea"/></div>
-                <div style={{textAlign:'center'}}>
-                  <span style={{fontSize:'13px',color:'#0f172a',fontWeight:600,display:'block'}}>Upload Image</span>
-                  <span style={{fontSize:'11px',color:'#64748b'}}>JPEG or PNG up to 5MB</span>
-                </div>
-                <input type="file" accept="image/*" onChange={handleBgUpload} style={{display:'none'}}/>
-              </label>
-              {side.background&&(
-                <div style={{marginTop:'8px',display:'flex',alignItems:'center',justifyContent:'space-between',padding:'8px 12px',background:'#ecfdf5',border:'1px solid #a7f3d0',borderRadius:'8px'}}>
-                  <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
-                    <img src={side.background} style={{height:'32px',width:'24px',objectFit:'cover',borderRadius:'4px',border:'1px solid rgba(0,0,0,0.1)'}}/>
-                    <span style={{fontSize:'12px',color:'#059669',fontWeight:600}}>Background Active</span>
-                  </div>
-                  <button onClick={()=>updateSideProps({background:null})} style={{fontSize:'11px',color:'#dc2626',background:'#fff',border:'1px solid #fecaca',borderRadius:'6px',padding:'4px 8px',cursor:'pointer',fontWeight:600}}>Remove</button>
-                </div>
-              )}
-            </AccSection>
-
-            <AccSection id="fields" icon={<Layers size={16}/>} title="Layers & Fields" open={openSection==="fields"} onToggle={toggleSection}>
-              {/* Special Layers */}
-              {activeSide==='front' && (
-                <button onClick={()=>{setSelectedLayer('photo'); setSelectedQR(false);}} style={{display:'flex',alignItems:'center',gap:'12px',padding:'12px',borderRadius:'8px',border:selectedLayer==='photo'?'1px solid #3b82f6':'1px solid #e2e8f0',background:selectedLayer==='photo'?'#eff6ff':'#fff',cursor:'pointer',textAlign:'left',transition:'all 0.1s',boxShadow:selectedLayer==='photo'?'0 2px 6px rgba(59,130,246,0.15)':'0 1px 2px rgba(0,0,0,0.02)',marginBottom:'8px'}}>
-                  <div style={{background:'#e0e7ff',color:'#4f46e5',padding:'6px',borderRadius:'6px'}}><ImageIcon size={14}/></div>
-                  <div style={{flex:1}}><div style={{fontSize:'12px',fontWeight:700,color:selectedLayer==='photo'?'#2563eb':'#0f172a'}}>Employee Photo</div><div style={{fontSize:'11px',color:'#64748b',marginTop:'2px'}}>{side.showPhoto?'Visible':'Hidden'}</div></div>
+            {/* ── LAYERS TAB ── */}
+            {leftTab==='layers' && <>
+              <AccSection id="employee" icon={<Save size={16}/>} title="Template Info" open={openSection==="employee"} onToggle={toggleSection}>
+                <p style={{margin:'0 0 8px',fontSize:'11px',color:'#64748b'}}>Name your template before saving.</p>
+                <input type="text" value={templateName} onChange={e=>setTemplateName(e.target.value)} placeholder="Template name (e.g. LMVC Corp)" style={{...inpStyle,marginBottom:'8px'}}/>
+                <input type="text" value={templateCompany} onChange={e=>setTemplateCompany(e.target.value)} placeholder="Company (optional)" style={{...inpStyle,marginBottom:'12px'}}/>
+                <button onClick={saveAsTemplate} disabled={savingTemplate||!templateName.trim()}
+                  style={{width:'100%',background:templateName.trim()?'linear-gradient(135deg,#10b981,#059669)':'#f1f5f9',color:templateName.trim()?'#fff':'#94a3b8',border:'none',borderRadius:'8px',padding:'10px',cursor:templateName.trim()?'pointer':'not-allowed',fontSize:'13px',fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',gap:'8px'}}>
+                  {savingTemplate?<Loader2 size={14} style={{animation:'spin 1s linear infinite'}}/>:<Save size={14}/>} Save Template
                 </button>
-              )}
-              <button onClick={()=>{setSelectedLayer('sig'); setSelectedQR(false);}} style={{display:'flex',alignItems:'center',gap:'12px',padding:'12px',borderRadius:'8px',border:selectedLayer==='sig'?'1px solid #8b5cf6':'1px solid #e2e8f0',background:selectedLayer==='sig'?'#f3e8ff':'#fff',cursor:'pointer',textAlign:'left',transition:'all 0.1s',boxShadow:selectedLayer==='sig'?'0 2px 6px rgba(139,92,246,0.15)':'0 1px 2px rgba(0,0,0,0.02)',marginBottom:'8px'}}>
-                <div style={{background:'#ede9fe',color:'#7c3aed',padding:'6px',borderRadius:'6px'}}><Settings size={14}/></div>
-                <div style={{flex:1}}><div style={{fontSize:'12px',fontWeight:700,color:selectedLayer==='sig'?'#7c3aed':'#0f172a'}}>Signature</div><div style={{fontSize:'11px',color:'#64748b',marginTop:'2px'}}>{side.showSig?'Visible':'Hidden'}</div></div>
-              </button>
-              {/* QR Code layer - always shown (back side) */}
-              <button onClick={()=>{setSelectedQR(true);setSelectedFieldId(null);setSelectedLayer(null);}}
-                style={{display:'flex',alignItems:'center',gap:'12px',padding:'12px',borderRadius:'8px',border:selectedQR?'1px solid #eab308':'1px solid #e2e8f0',background:selectedQR?'#fefce8':'#fff',cursor:'pointer',textAlign:'left',transition:'all 0.1s',boxShadow:selectedQR?'0 2px 6px rgba(234,179,8,0.2)':'0 1px 2px rgba(0,0,0,0.02)',marginBottom:'16px'}}>
-                <div style={{background:'#fef9c3',color:'#a16207',padding:'6px',borderRadius:'6px',fontSize:'13px',lineHeight:1,display:'flex',alignItems:'center',justifyContent:'center',width:'26px',height:'26px'}}>▦</div>
-                <div style={{flex:1}}><div style={{fontSize:'12px',fontWeight:700,color:selectedQR?'#a16207':'#0f172a'}}>QR Code</div><div style={{fontSize:'11px',color:'#64748b',marginTop:'2px'}}>{(activeSide==='back'&&side.showQR)?'Visible (Back)':'Back side only'}</div></div>
-              </button>
-              <div style={{height:'1px',background:'#f1f5f9',margin:'0 -20px 16px'}}/>
-              
-              <div style={{fontSize:'11px',fontWeight:700,color:'#94a3b8',textTransform:'uppercase',letterSpacing:'1px',marginBottom:'10px'}}>Text Elements</div>
-              <div style={{display:'flex',flexDirection:'column',gap:'6px'}}>
-                {side.fields.map((field:IDField)=>(
-                  <button key={field.id} onClick={()=>{setSelectedFieldId(field.id); setSelectedQR(false);}}
-                    style={{display:'flex',alignItems:'center',gap:'10px',padding:'10px 12px',borderRadius:'8px',border:selectedFieldId===field.id?'1px solid #ec4899':'1px solid #e2e8f0',background:selectedFieldId===field.id?'#fdf2f8':'#fff',cursor:'pointer',textAlign:'left',transition:'all 0.1s',boxShadow:selectedFieldId===field.id?'0 2px 6px rgba(236,72,153,0.15)':'0 1px 2px rgba(0,0,0,0.02)'}}>
-                    <div style={{width:'12px',height:'12px',borderRadius:'4px',background:field.color,border:'1px solid rgba(0,0,0,0.1)',flexShrink:0}}></div>
-                    <div style={{flex:1,minWidth:0}}>
-                      <div style={{fontSize:'12px',fontWeight:700,color:selectedFieldId===field.id?'#be185d':'#0f172a'}}>{field.label}</div>
-                      <div style={{fontSize:'11px',color:'#64748b',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',marginTop:'1px'}}>{field.value}</div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </AccSection>
+              </AccSection>
 
-            <AccSection id="templates" icon={<LayoutTemplate size={16}/>} title={`Existing Templates (${templates.length})`} open={openSection==="templates"} onToggle={toggleSection}>
-              <p style={{margin:'0 0 10px',fontSize:'11px',color:'#64748b'}}>Load an existing template to edit.</p>
-              <button onClick={()=>setShowTemplateModal(true)} disabled={templates.length===0}
-                style={{width:'100%',background:templates.length>0?'linear-gradient(135deg,#667eea,#764ba2)':'#f1f5f9',color:templates.length>0?'#fff':'#94a3b8',border:'none',borderRadius:'10px',padding:'11px',cursor:templates.length>0?'pointer':'not-allowed',fontSize:'13px',fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',gap:'8px',boxShadow:templates.length>0?'0 4px 12px rgba(102,126,234,0.3)':'none'}}>
-                <LayoutTemplate size={15}/> {templates.length===0?'No Templates Yet':`Browse Templates (${templates.length})`}
-              </button>
-            </AccSection>
+              <AccSection id="fields" icon={<Layers size={16}/>} title="Layers & Fields" open={openSection==="fields"} onToggle={toggleSection}>
+                {activeSide==='front' && (
+                  <button onClick={()=>{setSelectedLayer('photo'); setSelectedQR(false); setSelectedShapeId(null);}} style={{display:'flex',alignItems:'center',gap:'12px',padding:'12px',borderRadius:'8px',border:selectedLayer==='photo'?'1px solid #3b82f6':'1px solid #e2e8f0',background:selectedLayer==='photo'?'#eff6ff':'#fff',cursor:'pointer',textAlign:'left',transition:'all 0.1s',marginBottom:'8px'}}>
+                    <div style={{background:'#e0e7ff',color:'#4f46e5',padding:'6px',borderRadius:'6px'}}><ImageIcon size={14}/></div>
+                    <div style={{flex:1}}><div style={{fontSize:'12px',fontWeight:700,color:selectedLayer==='photo'?'#2563eb':'#0f172a'}}>Employee Photo</div><div style={{fontSize:'11px',color:'#64748b',marginTop:'2px'}}>{side.showPhoto?'Visible':'Hidden'}</div></div>
+                  </button>
+                )}
+                <button onClick={()=>{setSelectedLayer('sig'); setSelectedQR(false); setSelectedShapeId(null);}} style={{display:'flex',alignItems:'center',gap:'12px',padding:'12px',borderRadius:'8px',border:selectedLayer==='sig'?'1px solid #8b5cf6':'1px solid #e2e8f0',background:selectedLayer==='sig'?'#f3e8ff':'#fff',cursor:'pointer',textAlign:'left',transition:'all 0.1s',marginBottom:'8px'}}>
+                  <div style={{background:'#ede9fe',color:'#7c3aed',padding:'6px',borderRadius:'6px'}}><Settings size={14}/></div>
+                  <div style={{flex:1}}><div style={{fontSize:'12px',fontWeight:700,color:selectedLayer==='sig'?'#7c3aed':'#0f172a'}}>Signature</div><div style={{fontSize:'11px',color:'#64748b',marginTop:'2px'}}>{side.showSig?'Visible':'Hidden'}</div></div>
+                </button>
+                <button onClick={()=>{setSelectedQR(true);setSelectedFieldId(null);setSelectedLayer(null);setSelectedShapeId(null);}}
+                  style={{display:'flex',alignItems:'center',gap:'12px',padding:'12px',borderRadius:'8px',border:selectedQR?'1px solid #eab308':'1px solid #e2e8f0',background:selectedQR?'#fefce8':'#fff',cursor:'pointer',textAlign:'left',transition:'all 0.1s',marginBottom:'16px'}}>
+                  <div style={{background:'#fef9c3',color:'#a16207',padding:'6px',borderRadius:'6px',fontSize:'13px',lineHeight:1,display:'flex',alignItems:'center',justifyContent:'center',width:'26px',height:'26px'}}>▦</div>
+                  <div style={{flex:1}}><div style={{fontSize:'12px',fontWeight:700,color:selectedQR?'#a16207':'#0f172a'}}>QR Code</div><div style={{fontSize:'11px',color:'#64748b',marginTop:'2px'}}>{(activeSide==='back'&&side.showQR)?'Visible (Back)':'Back side only'}</div></div>
+                </button>
+
+                {/* Shapes list */}
+                {(side.shapes||[]).length>0 && <>
+                  <div style={{fontSize:'11px',fontWeight:700,color:'#94a3b8',textTransform:'uppercase',letterSpacing:'1px',marginBottom:'8px',padding:'0 4px'}}>Shapes</div>
+                  {(side.shapes||[]).map((sh:ShapeElement)=>(
+                    <div key={sh.id} style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'6px'}}>
+                      <button onClick={()=>{setSelectedShapeId(sh.id);setSelectedFieldId(null);setSelectedLayer(null);setSelectedQR(false);}}
+                        style={{flex:1,display:'flex',alignItems:'center',gap:'10px',padding:'10px 12px',borderRadius:'8px',border:selectedShapeId===sh.id?'1px solid #667eea':'1px solid #e2e8f0',background:selectedShapeId===sh.id?'#eff6ff':'#fff',cursor:'pointer',textAlign:'left'}}>
+                        <div style={{width:'20px',height:'20px',background:sh.fill,borderRadius:sh.type==='circle'?'50%':sh.type==='line'?'2px':`${sh.borderRadius||2}px`,border:`${sh.strokeWidth||0}px solid ${sh.stroke}`,flexShrink:0}}/>
+                        <span style={{fontSize:'12px',fontWeight:600,color:selectedShapeId===sh.id?'#667eea':'#0f172a',textTransform:'capitalize'}}>{sh.type}</span>
+                      </button>
+                      <button onClick={()=>deleteShape(sh.id)} style={{padding:'6px',border:'1px solid #fecaca',borderRadius:'6px',background:'#fef2f2',color:'#dc2626',cursor:'pointer',display:'flex',alignItems:'center',flexShrink:0}}><Trash2 size={12}/></button>
+                    </div>
+                  ))}
+                </>}
+
+                {/* Text fields list */}
+                <div style={{fontSize:'11px',fontWeight:700,color:'#94a3b8',textTransform:'uppercase',letterSpacing:'1px',marginBottom:'8px',padding:'0 4px',marginTop:'8px'}}>Text Fields</div>
+                <div style={{display:'flex',flexDirection:'column',gap:'6px'}}>
+                  {side.fields.map((field:IDField)=>(
+                    <div key={field.id} style={{display:'flex',alignItems:'center',gap:'8px'}}>
+                      <button onClick={()=>{setSelectedFieldId(field.id);setSelectedLayer(null);setSelectedShapeId(null);setSelectedQR(false);if(isMobile)setMobileTab('props');}}
+                        style={{flex:1,display:'flex',alignItems:'center',gap:'10px',padding:'10px 12px',borderRadius:'8px',border:selectedFieldId===field.id?'1px solid #667eea':'1px solid #e2e8f0',background:selectedFieldId===field.id?'#eff6ff':'#fff',cursor:'pointer',textAlign:'left'}}>
+                        <div style={{display:'flex',flexDirection:'column',minWidth:0}}>
+                          <div style={{fontSize:'12px',fontWeight:700,color:selectedFieldId===field.id?'#667eea':'#0f172a',display:'flex',alignItems:'center',gap:'6px'}}>
+                            <span style={{width:'8px',height:'8px',borderRadius:'50%',background:field.visible?'#10b981':'#ef4444',flexShrink:0}}/>
+                            {field.label}
+                          </div>
+                          <div style={{fontSize:'11px',color:'#64748b',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',marginTop:'1px'}}>{field.value}</div>
+                        </div>
+                      </button>
+                      {field.label==='Text Box' && <button onClick={()=>deleteField(field.id)} style={{padding:'6px',border:'1px solid #fecaca',borderRadius:'6px',background:'#fef2f2',color:'#dc2626',cursor:'pointer',display:'flex',alignItems:'center',flexShrink:0}}><Trash2 size={12}/></button>}
+                    </div>
+                  ))}
+                </div>
+              </AccSection>
+
+              <AccSection id="templates" icon={<LayoutTemplate size={16}/>} title={`Existing Templates (${templates.length})`} open={openSection==="templates"} onToggle={toggleSection}>
+                <p style={{margin:'0 0 10px',fontSize:'11px',color:'#64748b'}}>Load an existing template to edit.</p>
+                <button onClick={()=>setShowTemplateModal(true)} disabled={templates.length===0}
+                  style={{width:'100%',background:templates.length>0?'linear-gradient(135deg,#667eea,#764ba2)':'#f1f5f9',color:templates.length>0?'#fff':'#94a3b8',border:'none',borderRadius:'10px',padding:'11px',cursor:templates.length>0?'pointer':'not-allowed',fontSize:'13px',fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',gap:'8px',boxShadow:templates.length>0?'0 4px 12px rgba(102,126,234,0.3)':'none'}}>
+                  <LayoutTemplate size={15}/> {templates.length===0?'No Templates Yet':`Browse Templates (${templates.length})`}
+                </button>
+              </AccSection>
+            </>}
+
+            {/* ── ELEMENTS TAB ── */}
+            {leftTab==='elements' && (
+              <div style={{padding:'16px'}}>
+                <p style={{margin:'0 0 16px',fontSize:'12px',color:'#64748b',lineHeight:'1.5'}}>Click to add an element to the card. Then drag to reposition and resize.</p>
+
+                {/* Add Text */}
+                <div style={{marginBottom:'20px'}}>
+                  <div style={{fontSize:'11px',fontWeight:700,color:'#94a3b8',textTransform:'uppercase',letterSpacing:'1px',marginBottom:'10px'}}>Text</div>
+                  <button onClick={addTextBox}
+                    style={{width:'100%',display:'flex',alignItems:'center',gap:'12px',padding:'14px',borderRadius:'10px',border:'1.5px dashed #c7d2fe',background:'#eff6ff',cursor:'pointer',transition:'all 0.15s'}}
+                    onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.background='#e0e7ff';}}
+                    onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.background='#eff6ff';}}>
+                    <div style={{background:'#667eea',color:'#fff',padding:'8px',borderRadius:'8px',fontSize:'14px',fontWeight:800,lineHeight:1}}>T</div>
+                    <div><div style={{fontSize:'13px',fontWeight:700,color:'#4f46e5'}}>Add Text Box</div><div style={{fontSize:'11px',color:'#6366f1',marginTop:'2px'}}>Free-form draggable text</div></div>
+                  </button>
+                </div>
+
+                {/* Shapes */}
+                <div style={{marginBottom:'20px'}}>
+                  <div style={{fontSize:'11px',fontWeight:700,color:'#94a3b8',textTransform:'uppercase',letterSpacing:'1px',marginBottom:'10px'}}>Shapes</div>
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'8px'}}>
+                    {([
+                      {type:'rect'   as const, label:'Rectangle', preview:<div style={{width:'28px',height:'20px',background:'#667eea',borderRadius:'3px'}}/>},
+                      {type:'circle' as const, label:'Circle',    preview:<div style={{width:'22px',height:'22px',background:'#ec4899',borderRadius:'50%'}}/>},
+                      {type:'line'   as const, label:'Line',      preview:<div style={{width:'28px',height:'3px',background:'#8b5cf6',borderRadius:'2px',marginTop:'9px'}}/>},
+                    ]).map(({type,label,preview})=>(
+                      <button key={type} onClick={()=>addShape(type)}
+                        style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'8px',padding:'14px 8px',borderRadius:'10px',border:'1px solid #e2e8f0',background:'#fff',cursor:'pointer',transition:'all 0.15s'}}
+                        onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.background='#f8fafc';(e.currentTarget as HTMLElement).style.borderColor='#667eea';}}
+                        onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.background='#fff';(e.currentTarget as HTMLElement).style.borderColor='#e2e8f0';}}>
+                        <div style={{height:'22px',display:'flex',alignItems:'center'}}>{preview}</div>
+                        <span style={{fontSize:'11px',color:'#475569',fontWeight:600}}>{label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Quick color shapes */}
+                <div>
+                  <div style={{fontSize:'11px',fontWeight:700,color:'#94a3b8',textTransform:'uppercase',letterSpacing:'1px',marginBottom:'10px'}}>Quick Color Blocks</div>
+                  <div style={{display:'flex',flexWrap:'wrap',gap:'8px'}}>
+                    {['#667eea','#ec4899','#10b981','#f59e0b','#ef4444','#8b5cf6','#0ea5e9','#ffffff','#0f172a'].map(color=>(
+                      <button key={color} onClick={()=>{
+                        const sh:ShapeElement={id:`shape_${Date.now()}`,type:'rect',x:50,y:50,w:40,h:20,fill:color,fillOpacity:90,stroke:'transparent',strokeWidth:0,borderRadius:0};
+                        setSide((p:IDSide)=>({...p,shapes:[...(p.shapes||[]),sh]}));
+                        setSelectedShapeId(sh.id);setSelectedFieldId(null);setSelectedLayer(null);setSelectedQR(false);
+                      }}
+                        style={{width:'32px',height:'32px',borderRadius:'6px',background:color,border:'2px solid #e2e8f0',cursor:'pointer',transition:'transform 0.1s'}}
+                        onMouseEnter={e=>(e.currentTarget as HTMLElement).style.transform='scale(1.15)'}
+                        onMouseLeave={e=>(e.currentTarget as HTMLElement).style.transform='scale(1)'}
+                        title={color}/>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ── BACKGROUND TAB ── */}
+            {leftTab==='background' && (
+              <div style={{padding:'16px',display:'flex',flexDirection:'column',gap:'16px'}}>
+
+                {/* Solid Color */}
+                <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:'12px',padding:'14px',display:'flex',flexDirection:'column',gap:'10px'}}>
+                  <div style={{fontSize:'11px',fontWeight:700,color:'#94a3b8',textTransform:'uppercase',letterSpacing:'1px'}}>Solid Color</div>
+                  <div style={{display:'flex',flexWrap:'wrap',gap:'6px',marginBottom:'4px'}}>
+                    {['#1e3a5f','#b91c1c','#0f172a','#1e40af','#065f46','#6b21a8','#9a3412','#374151','#ffffff'].map(c=>(
+                      <button key={c} onClick={()=>updateSideProps({bgColor:c,bgGradient:null,background:null})}
+                        style={{width:'28px',height:'28px',borderRadius:'6px',background:c,border:side.bgColor===c&&!side.bgGradient&&!side.background?'2px solid #667eea':'2px solid #e2e8f0',cursor:'pointer'}}/>
+                    ))}
+                  </div>
+                  <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
+                    <input type="color" value={side.bgColor||'#1e3a5f'} onChange={e=>updateSideProps({bgColor:e.target.value,bgGradient:null,background:null})}
+                      style={{width:'40px',height:'36px',border:'1px solid #e2e8f0',borderRadius:'8px',cursor:'pointer',padding:'2px',flexShrink:0}}/>
+                    <input type="text" value={side.bgColor||''} onChange={e=>updateSideProps({bgColor:e.target.value,bgGradient:null,background:null})} placeholder="#1e3a5f"
+                      style={{...inpStyle,fontFamily:'monospace',fontSize:'12px'}}/>
+                  </div>
+                </div>
+
+                {/* Gradient */}
+                <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:'12px',padding:'14px',display:'flex',flexDirection:'column',gap:'10px'}}>
+                  <div style={{fontSize:'11px',fontWeight:700,color:'#94a3b8',textTransform:'uppercase',letterSpacing:'1px'}}>Gradient</div>
+                  <div style={{display:'flex',flexWrap:'wrap',gap:'6px',marginBottom:'4px'}}>
+                    {[
+                      {c1:'#667eea',c2:'#764ba2',a:135},
+                      {c1:'#ec4899',c2:'#be185d',a:135},
+                      {c1:'#1e3a5f',c2:'#0ea5e9',a:160},
+                      {c1:'#065f46',c2:'#10b981',a:135},
+                      {c1:'#b91c1c',c2:'#f97316',a:160},
+                      {c1:'#6b21a8',c2:'#ec4899',a:135},
+                    ].map(({c1,c2,a},i)=>(
+                      <button key={i} onClick={()=>updateSideProps({bgGradient:{type:'linear',color1:c1,color2:c2,angle:a},background:null,bgColor:undefined})}
+                        style={{width:'36px',height:'36px',borderRadius:'8px',background:`linear-gradient(${a}deg,${c1},${c2})`,border:'2px solid #e2e8f0',cursor:'pointer',transition:'transform 0.1s'}}
+                        onMouseEnter={e=>(e.currentTarget as HTMLElement).style.transform='scale(1.1)'}
+                        onMouseLeave={e=>(e.currentTarget as HTMLElement).style.transform='scale(1)'}/>
+                    ))}
+                  </div>
+                  <div style={{display:'flex',gap:'8px'}}>
+                    <div style={{flex:1}}>
+                      <label style={{fontSize:'11px',color:'#64748b',display:'block',marginBottom:'4px'}}>Color 1</label>
+                      <input type="color" value={side.bgGradient?.color1||'#667eea'} onChange={e=>updateSideProps({bgGradient:{type:'linear',color1:e.target.value,color2:side.bgGradient?.color2||'#764ba2',angle:side.bgGradient?.angle??135},background:null})}
+                        style={{width:'100%',height:'36px',border:'1px solid #e2e8f0',borderRadius:'8px',cursor:'pointer',padding:'2px'}}/>
+                    </div>
+                    <div style={{flex:1}}>
+                      <label style={{fontSize:'11px',color:'#64748b',display:'block',marginBottom:'4px'}}>Color 2</label>
+                      <input type="color" value={side.bgGradient?.color2||'#764ba2'} onChange={e=>updateSideProps({bgGradient:{type:'linear',color1:side.bgGradient?.color1||'#667eea',color2:e.target.value,angle:side.bgGradient?.angle??135},background:null})}
+                        style={{width:'100%',height:'36px',border:'1px solid #e2e8f0',borderRadius:'8px',cursor:'pointer',padding:'2px'}}/>
+                    </div>
+                  </div>
+                  <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
+                    <label style={{fontSize:'11px',color:'#64748b',minWidth:'48px'}}>Angle</label>
+                    <input type="range" min={0} max={360} value={side.bgGradient?.angle??135} onChange={e=>updateSideProps({bgGradient:{type:'linear',color1:side.bgGradient?.color1||'#667eea',color2:side.bgGradient?.color2||'#764ba2',angle:Number(e.target.value)},background:null})} style={{flex:1,accentColor:'#667eea'}}/>
+                    <span style={{fontSize:'12px',fontWeight:600,minWidth:'36px',textAlign:'right'}}>{side.bgGradient?.angle??135}°</span>
+                  </div>
+                </div>
+
+                {/* Image Upload */}
+                <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:'12px',padding:'14px',display:'flex',flexDirection:'column',gap:'10px'}}>
+                  <div style={{fontSize:'11px',fontWeight:700,color:'#94a3b8',textTransform:'uppercase',letterSpacing:'1px'}}>Image</div>
+                  <label style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'10px',border:'1.5px dashed #cbd5e1',borderRadius:'10px',padding:'20px',cursor:'pointer',background:'#fff',transition:'all 0.2s'}}
+                    onMouseEnter={e=>{ (e.currentTarget as HTMLElement).style.borderColor='#667eea'; (e.currentTarget as HTMLElement).style.background='#eff6ff'; }}
+                    onMouseLeave={e=>{ (e.currentTarget as HTMLElement).style.borderColor='#cbd5e1'; (e.currentTarget as HTMLElement).style.background='#fff'; }}>
+                    <div style={{background:'#fff',padding:'10px',borderRadius:'50%',boxShadow:'0 2px 8px rgba(0,0,0,0.05)'}}><Upload size={18} color="#667eea"/></div>
+                    <div style={{textAlign:'center'}}>
+                      <span style={{fontSize:'13px',color:'#0f172a',fontWeight:600,display:'block'}}>Upload Image</span>
+                      <span style={{fontSize:'11px',color:'#64748b'}}>JPEG or PNG</span>
+                    </div>
+                    <input type="file" accept="image/*" onChange={handleBgUpload} style={{display:'none'}}/>
+                  </label>
+                  {side.background&&(
+                    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'8px 12px',background:'#ecfdf5',border:'1px solid #a7f3d0',borderRadius:'8px'}}>
+                      <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
+                        <img src={side.background} style={{height:'32px',width:'24px',objectFit:'cover',borderRadius:'4px',border:'1px solid rgba(0,0,0,0.1)'}}/>
+                        <span style={{fontSize:'12px',color:'#059669',fontWeight:600}}>Image Active</span>
+                      </div>
+                      <button onClick={()=>updateSideProps({background:null})} style={{fontSize:'11px',color:'#dc2626',background:'#fff',border:'1px solid #fecaca',borderRadius:'6px',padding:'4px 8px',cursor:'pointer',fontWeight:600}}>Remove</button>
+                    </div>
+                  )}
+                  {/* Clear all background */}
+                  {(side.bgColor||side.bgGradient||side.background) && (
+                    <button onClick={()=>updateSideProps({bgColor:undefined,bgGradient:null,background:null})}
+                      style={{padding:'8px',borderRadius:'8px',border:'1px solid #fecaca',background:'#fef2f2',color:'#dc2626',cursor:'pointer',fontSize:'12px',fontWeight:600,display:'flex',alignItems:'center',justifyContent:'center',gap:'6px'}}>
+                      <X size={12}/> Clear Background
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
           </div>
         </div>
-
         {/* ════════════════════════════════════ CANVAS WORKSPACE ══ */}
         <div style={{flex:1,display:'flex',flexDirection:'column',position:'relative',overflow:'hidden',background:'#f1f5f9'}}
              onMouseDown={(e)=>{if(e.target===e.currentTarget){setSelectedFieldId(null);setSelectedLayer(null);}}}>
@@ -1141,11 +1496,11 @@ export default function TemplateManager({ editingTemplate }: TemplateManagerProp
             <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
               <Settings size={16} color="#64748b"/>
               <span style={{fontWeight:700,fontSize:'13px',color:'#0f172a'}}>
-                {selectedLayer ? (selectedLayer==='photo'?'Photo Settings':'Signature Settings') : selectedQR ? 'QR Code Settings' : selectedField ? 'Text Properties' : 'Design Properties'}
+                {selectedLayer ? (selectedLayer==='photo'?'Photo Settings':'Signature Settings') : selectedQR ? 'QR Code Settings' : selectedShape ? 'Shape Properties' : selectedField ? 'Text Properties' : 'Design Properties'}
               </span>
             </div>
-            {(selectedLayer || selectedField || selectedQR) && (
-              <button onClick={()=>{setSelectedLayer(null); setSelectedFieldId(null); setSelectedQR(false);}} style={{background:'#fff',border:'1px solid #e2e8f0',borderRadius:'6px',padding:'4px',color:'#64748b',cursor:'pointer',boxShadow:'0 1px 2px rgba(0,0,0,0.02)'}}><X size={14}/></button>
+            {(selectedLayer || selectedField || selectedQR || selectedShape) && (
+              <button onClick={()=>{setSelectedLayer(null); setSelectedFieldId(null); setSelectedQR(false); setSelectedShapeId(null);}} style={{background:'#fff',border:'1px solid #e2e8f0',borderRadius:'6px',padding:'4px',color:'#64748b',cursor:'pointer',boxShadow:'0 1px 2px rgba(0,0,0,0.02)'}}><X size={14}/></button>
             )}
           </div>
           
@@ -1187,6 +1542,63 @@ export default function TemplateManager({ editingTemplate }: TemplateManagerProp
                     </div>
                   ))}
                 </div>
+              </div>
+            ) : selectedShape ? (
+              <div style={{padding:'20px',display:'flex',flexDirection:'column',gap:'16px'}}>
+                {/* Fill */}
+                <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:'12px',padding:'14px',display:'flex',flexDirection:'column',gap:'10px'}}>
+                  <div style={{fontSize:'11px',fontWeight:700,color:'#94a3b8',textTransform:'uppercase',letterSpacing:'1px'}}>Fill</div>
+                  <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
+                    <input type="color" value={selectedShape.fill==='transparent'?'#ffffff':selectedShape.fill} onChange={e=>updateShape(selectedShape.id,{fill:e.target.value})} style={{width:'36px',height:'30px',border:'1px solid #e2e8f0',borderRadius:'6px',cursor:'pointer',padding:'2px',flexShrink:0}}/>
+                    <input type="text" value={selectedShape.fill} onChange={e=>updateShape(selectedShape.id,{fill:e.target.value})} style={{flex:1,...inpStyle,fontFamily:'monospace',fontSize:'12px'}}/>
+                  </div>
+                  <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
+                    <label style={{fontSize:'11px',color:'#64748b',minWidth:'52px'}}>Opacity</label>
+                    <input type="range" min={0} max={100} value={selectedShape.fillOpacity} onChange={e=>updateShape(selectedShape.id,{fillOpacity:Number(e.target.value)})} style={{flex:1,accentColor:'#667eea'}}/>
+                    <span style={{fontSize:'12px',fontWeight:600,minWidth:'34px',textAlign:'right'}}>{selectedShape.fillOpacity}%</span>
+                  </div>
+                  <button onClick={()=>updateShape(selectedShape.id,{fill:'transparent',fillOpacity:0})} style={{padding:'6px 10px',borderRadius:'6px',border:'1px solid #e2e8f0',background:'#fff',color:'#64748b',cursor:'pointer',fontSize:'11px',fontWeight:600,alignSelf:'flex-start'}}>No Fill</button>
+                </div>
+                {/* Stroke */}
+                <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:'12px',padding:'14px',display:'flex',flexDirection:'column',gap:'10px'}}>
+                  <div style={{fontSize:'11px',fontWeight:700,color:'#94a3b8',textTransform:'uppercase',letterSpacing:'1px'}}>Border / Stroke</div>
+                  <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
+                    <input type="color" value={selectedShape.stroke==='transparent'?'#000000':selectedShape.stroke} onChange={e=>updateShape(selectedShape.id,{stroke:e.target.value})} style={{width:'36px',height:'30px',border:'1px solid #e2e8f0',borderRadius:'6px',cursor:'pointer',padding:'2px',flexShrink:0}}/>
+                    <input type="text" value={selectedShape.stroke} onChange={e=>updateShape(selectedShape.id,{stroke:e.target.value})} style={{flex:1,...inpStyle,fontFamily:'monospace',fontSize:'12px'}}/>
+                  </div>
+                  <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
+                    <label style={{fontSize:'11px',color:'#64748b',minWidth:'52px'}}>Width</label>
+                    <input type="range" min={0} max={16} value={selectedShape.strokeWidth} onChange={e=>updateShape(selectedShape.id,{strokeWidth:Number(e.target.value)})} style={{flex:1,accentColor:'#667eea'}}/>
+                    <span style={{fontSize:'12px',fontWeight:600,minWidth:'34px',textAlign:'right'}}>{selectedShape.strokeWidth}px</span>
+                  </div>
+                </div>
+                {/* Border Radius (rect only) */}
+                {selectedShape.type==='rect' && (
+                  <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:'12px',padding:'14px',display:'flex',flexDirection:'column',gap:'10px'}}>
+                    <div style={{fontSize:'11px',fontWeight:700,color:'#94a3b8',textTransform:'uppercase',letterSpacing:'1px'}}>Corner Radius</div>
+                    <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
+                      <input type="range" min={0} max={50} value={selectedShape.borderRadius||0} onChange={e=>updateShape(selectedShape.id,{borderRadius:Number(e.target.value)})} style={{flex:1,accentColor:'#667eea'}}/>
+                      <span style={{fontSize:'12px',fontWeight:600,minWidth:'34px',textAlign:'right'}}>{selectedShape.borderRadius||0}px</span>
+                    </div>
+                  </div>
+                )}
+                {/* Position & Size */}
+                <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:'12px',padding:'14px',display:'flex',flexDirection:'column',gap:'10px'}}>
+                  <div style={{fontSize:'11px',fontWeight:700,color:'#94a3b8',textTransform:'uppercase',letterSpacing:'1px'}}>Position & Size</div>
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px'}}>
+                    {([['X %','x',selectedShape.x],['Y %','y',selectedShape.y],['W %','w',selectedShape.w],['H %','h',selectedShape.h]] as [string,string,number][]).map(([lbl,key,val])=>(
+                      <div key={key}>
+                        <label style={{fontSize:'11px',color:'#64748b',display:'block',marginBottom:'4px',fontWeight:500}}>{lbl}</label>
+                        <input type="number" value={Math.round(val*10)/10} min={0} max={100} step={0.5} onChange={e=>updateShape(selectedShape.id,{[key]:Number(e.target.value)})} style={{...inpStyle,padding:'6px 8px'}}/>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {/* Delete */}
+                <button onClick={()=>deleteShape(selectedShape.id)}
+                  style={{padding:'10px',borderRadius:'8px',border:'1px solid #fecaca',background:'#fef2f2',color:'#dc2626',cursor:'pointer',fontSize:'13px',fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',gap:'8px'}}>
+                  <Trash2 size={14}/> Delete Shape
+                </button>
               </div>
             ) : selectedField ? (
               <FieldEditor field={selectedField} onUpdate={updateField}/>

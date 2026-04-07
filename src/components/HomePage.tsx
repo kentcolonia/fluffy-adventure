@@ -1,5 +1,5 @@
 import React from 'react';
-import { CreditCard, Download, FileSpreadsheet, TrendingUp, Shield, Clock } from 'lucide-react';
+import { Wand2, Archive, FileSpreadsheet, TrendingUp, Shield, Clock, BookMarked } from 'lucide-react';
 import type { ActiveSection } from '../types';
 
 interface Props {
@@ -15,13 +15,14 @@ export default function HomePage({ savedIDs, employeeDatabase, onNavigate }: Pro
 
   const stats = [
     { label: 'Database Records', value: employeeDatabase.length, icon: <FileSpreadsheet size={20}/>, color: '#10b981', bg: '#10b98115', section: 'database' as ActiveSection, trend: employeeDatabase.length + ' loaded' },
-    { label: 'Saved ID Cards',   value: savedIDs.length,         icon: <CreditCard size={20}/>,      color: '#8b5cf6', bg: '#8b5cf615', section: 'idrecords' as ActiveSection, trend: savedIDs.length + ' total' },
+    { label: 'Saved ID Cards',   value: savedIDs.length,         icon: <Archive size={20}/>,         color: '#8b5cf6', bg: '#8b5cf615', section: 'idrecords' as ActiveSection, trend: savedIDs.length + ' total' },
   ];
 
   const quickActions = [
-    { label: 'ID Builder',     desc: 'Design employee ID cards', icon: <CreditCard size={22}/>,      color: '#ec4899', gradient: 'linear-gradient(135deg,#ec4899,#be185d)', section: 'idbuilder' as ActiveSection },
-    { label: 'Load Database',  desc: 'Import from Excel',        icon: <FileSpreadsheet size={22}/>, color: '#10b981', gradient: 'linear-gradient(135deg,#10b981,#059669)', section: 'database' as ActiveSection },
-    { label: 'Saved IDs',      desc: 'View & print saved cards', icon: <Download size={22}/>,        color: '#8b5cf6', gradient: 'linear-gradient(135deg,#8b5cf6,#7c3aed)', section: 'idrecords' as ActiveSection },
+    { label: 'ID Builder',     desc: 'Design employee ID cards', icon: <Wand2 size={22}/>,           color: '#ec4899', gradient: 'linear-gradient(135deg,#ec4899,#be185d)', section: 'idbuilder' as ActiveSection },
+    { label: 'Load Database',  desc: 'Browse employee directory',  icon: <FileSpreadsheet size={22}/>, color: '#10b981', gradient: 'linear-gradient(135deg,#10b981,#059669)', section: 'database' as ActiveSection },
+    { label: 'Saved IDs',      desc: 'View & print saved cards', icon: <Archive size={22}/>,         color: '#8b5cf6', gradient: 'linear-gradient(135deg,#8b5cf6,#7c3aed)', section: 'idrecords' as ActiveSection },
+    { label: 'Templates',      desc: 'Manage ID templates',      icon: <BookMarked size={22}/>,      color: '#f59e0b', gradient: 'linear-gradient(135deg,#f59e0b,#d97706)', section: 'templates' as ActiveSection },
   ];
 
   return (
@@ -48,13 +49,13 @@ export default function HomePage({ savedIDs, employeeDatabase, onNavigate }: Pro
               style={{ background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(10px)', color: '#fff', border: '1px solid rgba(255,255,255,0.3)', borderRadius: '12px', padding: '10px 22px', cursor: 'pointer', fontSize: '13px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px', transition: 'all 0.2s' }}
               onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.3)'}
               onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.2)'}>
-              <CreditCard size={15}/> ID Builder
+              <Wand2 size={15}/> ID Builder
             </button>
             <button onClick={() => onNavigate('idrecords')}
               style={{ background: '#fff', color: '#667eea', border: 'none', borderRadius: '12px', padding: '10px 22px', cursor: 'pointer', fontSize: '13px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '0 4px 14px rgba(0,0,0,0.15)', transition: 'all 0.2s' }}
               onMouseEnter={e => (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)'}
               onMouseLeave={e => (e.currentTarget as HTMLElement).style.transform = 'none'}>
-              <Download size={15}/> Saved IDs
+              <Archive size={15}/> Saved IDs
             </button>
           </div>
         </div>
@@ -111,7 +112,7 @@ export default function HomePage({ savedIDs, employeeDatabase, onNavigate }: Pro
           <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {[
               { label: 'Database Records', value: employeeDatabase.length, icon: <FileSpreadsheet size={16}/>, color: '#10b981', desc: 'Employee data loaded' },
-              { label: 'ID Cards Saved',   value: savedIDs.length,         icon: <CreditCard size={16}/>,      color: '#8b5cf6', desc: 'Ready to print' },
+              { label: 'ID Cards Saved',   value: savedIDs.length,         icon: <Archive size={16}/>,         color: '#8b5cf6', desc: 'Ready to print' },
               { label: 'Completion Rate',  value: `${savedIDs.length ? Math.round((savedIDs.filter((s: any) => s.front && s.back).length / savedIDs.length) * 100) : 0}%`, icon: <TrendingUp size={16}/>, color: '#f59e0b', desc: 'Front & back designed' },
             ].map((s, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '12px', background: '#f8fafc', borderRadius: '12px' }}>

@@ -20,6 +20,19 @@ export interface EmployeeRecord {
   photo: string | null;
 }
 
+export interface ShapeElement {
+  id: string;
+  type: 'rect' | 'circle' | 'line';
+  x: number; y: number;
+  w: number; h: number;
+  fill: string;
+  fillOpacity: number;
+  stroke: string;
+  strokeWidth: number;
+  borderRadius?: number;
+  rotation?: number;
+}
+
 export interface IDField {
   id: string;
   label: string;
@@ -45,6 +58,9 @@ export interface IDField {
 
 export interface IDSide {
   background: string | null;
+  bgColor?: string;
+  bgGradient?: { type: 'linear' | 'radial'; color1: string; color2: string; angle?: number } | null;
+  shapes?: ShapeElement[];
   fields: IDField[];
   photoX: number; photoY: number; photoW: number; photoH: number; showPhoto: boolean;
   photoStrokeWidth?: number; photoStrokeColor?: string;

@@ -1,6 +1,6 @@
 import React from 'react';
 import QRCode from 'qrcode';
-import { Download, Loader2, Search, Settings, Image as ImageIcon, Save, Printer, RefreshCw, Undo, Redo, Grid, Magnet, X, MousePointer2, LayoutTemplate, Layers, Pencil, Trash2 } from 'lucide-react';
+import { Download, Loader2, Search, Settings, Image as ImageIcon, Save, Printer, RefreshCw, Undo, Redo, Grid, Magnet, X, MousePointer2, LayoutTemplate, Layers, Pencil, Trash2, ArrowLeft } from 'lucide-react';
 import { API_URL } from '../../types';
 import type { EmployeeRecord, IDField, IDSide, IDTemplate } from '../../types';
 import { resolveImg, hexToColorFilter, hexToColorFilterWhite } from '../../utils';
@@ -292,8 +292,9 @@ interface IDBuilderProps {
   onEditSaved?: (id: string) => void;
   pendingTemplate?: IDTemplate | null;
   onTemplatLoaded?: () => void;
+  onBack?: () => void;
 }
-export default function IDBuilder({ editingID, onEditSaved, pendingTemplate, onTemplatLoaded }: IDBuilderProps) {
+export default function IDBuilder({ editingID, onEditSaved, pendingTemplate, onTemplatLoaded, onBack }: IDBuilderProps) {
   const CARD_W = 214, CARD_H = 340; // CR80 portrait: 54mm x 85.6mm
 
   // ── core state ──
@@ -452,7 +453,18 @@ export default function IDBuilder({ editingID, onEditSaved, pendingTemplate, onT
   const generateQR = React.useCallback(async (empCode: string, url: string, fg: string, bg: string) => {
     if (!empCode) { setQrDataUrl(PLACEHOLDER_QR); return; }
     try {
-      const fullUrl = url.endsWith('/') ? url + empCode : url + '/' + empCode;
+      // Fetch the HMAC hash for this employee code so the QR URL never exposes the raw ID
+      let token = empCode;
+      try {
+        const hashRes = await fetch('/api/hash/' + encodeURIComponent(empCode));
+        if (hashRes.ok) {
+          const hashData = await hashRes.json();
+          if (hashData.hash) token = hashData.hash;
+        }
+      } catch { /* fall back to raw empCode if server unreachable */ }
+
+      const base = url.endsWith('/') ? url.slice(0, -1) : url;
+      const fullUrl = base + '/' + token;
       const dataUrl = await QRCode.toDataURL(fullUrl, {
         width: 200, margin: 1,
         color: { dark: fg || '#000000', light: bg || '#ffffff' }
@@ -1072,6 +1084,13 @@ export default function IDBuilder({ editingID, onEditSaved, pendingTemplate, onT
         {/* Brand & History */}
         <div style={{display:'flex',alignItems:'center',gap:'24px'}}>
           <div style={{display:'flex',alignItems:'center',gap:'12px'}}>
+            {onBack && (
+              <button onClick={onBack} style={{display:'flex',alignItems:'center',gap:'6px',padding:'7px 12px',borderRadius:'8px',border:'1px solid #e2e8f0',background:'#fff',color:'#475569',cursor:'pointer',fontSize:'13px',fontWeight:600,boxShadow:'0 1px 2px rgba(0,0,0,0.04)',transition:'all 0.15s',flexShrink:0}}
+                onMouseEnter={e=>(e.currentTarget as HTMLElement).style.background='#f8fafc'}
+                onMouseLeave={e=>(e.currentTarget as HTMLElement).style.background='#fff'}>
+                <ArrowLeft size={14}/> {!isMobile && 'Back'}
+              </button>
+            )}
             <div style={{background:'linear-gradient(135deg,#ec4899,#be185d)',padding:'8px',borderRadius:'10px',boxShadow:'0 4px 10px rgba(236,72,153,0.3)'}}><LayoutTemplate size={18} color="#fff"/></div>
             <div>
               <div style={{display:'flex',alignItems:'center',gap:'8px'}}>

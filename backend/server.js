@@ -24,6 +24,16 @@ const RECORDS_FILE = path.join(DATA_PATH, 'records.json');
 const TEMPLATES_FILE = path.join(DATA_PATH, 'templates.json');
 const USERS_FILE = path.join(DATA_PATH, 'users.json');
 
+// ── Employee ID Hashing ──
+// Set HASH_SECRET in your .env file. Keep this secret — changing it invalidates all existing QR codes.
+const HASH_SECRET = process.env.HASH_SECRET || 'avpass-default-secret-change-me';
+
+function hashEmpCode(empCode) {
+  return crypto.createHmac('sha256', HASH_SECRET)
+    .update(empCode.toLowerCase())
+    .digest('hex');
+}
+
 [DATA_PATH, IMAGES_PATH].forEach(dir => {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 });
@@ -186,25 +196,54 @@ app.get('/api/employees', async (req, res) => {
 // ==========================================
 
 // ── Employee Verification (Public) ──
-app.get('/api/verify/:empCode', async (req, res) => {
+// ── Generate a hash for an employee code (used when printing/generating QR codes) ──
+app.get('/api/hash/:empCode', (req, res) => {
   const { empCode } = req.params;
   if (!empCode) return res.status(400).json({ error: 'Employee code required' });
+  const hash = hashEmpCode(empCode);
+  res.json({ empCode, hash, url: `/verify/${hash}` });
+});
+
+app.get('/api/verify/:token', async (req, res) => {
+  const { token: tokenParam } = req.params;
+  if (!tokenParam) return res.status(400).json({ error: 'Token required' });
+
+  // Detect whether the param is a 64-char hex hash or a raw employee code
+  const isHash = /^[0-9a-f]{64}$/i.test(tokenParam);
 
   try {
     const token = await getHrisToken();
-    const url = new URL('https://api.avegabros.org/website/id-employees');
-    url.searchParams.append('key', process.env.HRIS_API_KEY);
-    url.searchParams.append('search', empCode);
-    url.searchParams.append('limit', '1');
 
-    const response = await axios.get(url.toString(), {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
+    let emp;
 
-    const list = Array.isArray(response.data) ? response.data : (response.data?.data ?? []);
-    const emp = list.find(e =>
-      (e.employee_id || '').toLowerCase() === empCode.toLowerCase()
-    ) || list[0];
+    if (isHash) {
+      // Hash mode: fetch all employees and find the one whose hashed ID matches
+      const url = new URL('https://api.avegabros.org/website/id-employees');
+      url.searchParams.append('key', process.env.HRIS_API_KEY);
+      url.searchParams.append('limit', '9999');
+
+      const response = await axios.get(url.toString(), {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      const list = Array.isArray(response.data) ? response.data : (response.data?.data ?? []);
+      emp = list.find(e => hashEmpCode(e.employee_id || '') === tokenParam.toLowerCase());
+    } else {
+      // Legacy/direct mode: search by employee code directly
+      const url = new URL('https://api.avegabros.org/website/id-employees');
+      url.searchParams.append('key', process.env.HRIS_API_KEY);
+      url.searchParams.append('search', tokenParam);
+      url.searchParams.append('limit', '1');
+
+      const response = await axios.get(url.toString(), {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      const list = Array.isArray(response.data) ? response.data : (response.data?.data ?? []);
+      emp = list.find(e =>
+        (e.employee_id || '').toLowerCase() === tokenParam.toLowerCase()
+      ) || list[0];
+    }
 
     if (!emp) return res.status(404).json({ found: false, status: 'NOT FOUND' });
 
@@ -241,9 +280,9 @@ app.get('/api/verify/:empCode', async (req, res) => {
   }
 });
 
-// ── Verification Page (served at /verify/:empCode) ──
-app.get('/verify/:empCode', (req, res) => {
-  const { empCode } = req.params;
+// ── Verification Page (served at /verify/:token) ──
+app.get('/verify/:token', (req, res) => {
+  const { token: tokenParam } = req.params;
   res.send(`<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -272,8 +311,6 @@ app.get('/verify/:empCode', (req, res) => {
     .name{font-size:20px;font-weight:800;color:#0f172a;margin-bottom:4px}
     .position{font-size:13px;color:#64748b;margin-bottom:4px}
     .company{font-size:12px;color:#94a3b8;margin-bottom:24px}
-    .empcode{font-size:11px;font-family:monospace;background:#f1f5f9;
-      color:#667eea;padding:4px 12px;border-radius:20px;display:inline-block;margin-bottom:24px}
     .badge{display:inline-flex;align-items:center;gap:10px;padding:14px 28px;
       border-radius:16px;font-size:18px;font-weight:800;letter-spacing:1px;margin-bottom:24px}
     .badge.active{background:#ecfdf5;color:#059669;border:2px solid #a7f3d0}
@@ -299,7 +336,7 @@ app.get('/verify/:empCode', (req, res) => {
   </div>
   <script>
     (async () => {
-      const empCode = ${JSON.stringify(empCode)};
+      const tokenParam = ${JSON.stringify(tokenParam)};
       const card = document.getElementById('card');
 
       function setCard(html) {
@@ -307,15 +344,15 @@ app.get('/verify/:empCode', (req, res) => {
       }
 
       try {
-        const res = await fetch('/api/verify/' + encodeURIComponent(empCode));
+        const res = await fetch('/api/verify/' + encodeURIComponent(tokenParam));
         const data = await res.json();
 
         if (!data.found) {
           setCard(
             '<div class="logo">🛡</div>' +
             '<div class="brand">AVPass ID Verification</div>' +
-            '<div class="error">⚠ Employee not found for ID: <strong>' + empCode + '</strong></div>' +
-            '<div class="footer">This ID card may be invalid or not registered in the system.</div>'
+            '<div class="error">⚠ Employee not found. This ID card may be invalid or not registered in the system.</div>' +
+            '<div class="footer">If you believe this is an error, please contact HR.</div>'
           );
           return;
         }
@@ -340,7 +377,6 @@ app.get('/verify/:empCode', (req, res) => {
           '<div class="name">' + (data.name || '—') + '</div>' +
           '<div class="position">' + (data.position || '') + '</div>' +
           companyHtml +
-          '<div class="empcode">' + (data.empCode || empCode) + '</div>' +
           '<div class="badge ' + badgeClass + '"><div class="dot"></div>' + data.status + '</div>' +
           '<div class="footer">Verified · ' + new Date().toLocaleString() + '</div>'
         );

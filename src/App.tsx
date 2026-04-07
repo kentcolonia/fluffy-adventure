@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { FileSpreadsheet, CreditCard, Download, Menu, Shield, X, Home, Clock } from 'lucide-react';
+import { FileSpreadsheet, BookMarked, Menu, Shield, X, Home, Clock, Wand2, Archive } from 'lucide-react';
 import { API_URL } from './types';
 import type { Employee, ActiveSection, EditingID } from './types';
 import LoginPage from './components/LoginPage';
@@ -10,7 +10,7 @@ import IDBuilder from './components/IDBuilder';
 import TemplateManager from './components/TemplateManager';
 import AccountManager from './components/AccountManager';
 
-const INACTIVE_MS = 60_000;  // 1 minute total inactivity before logout
+const INACTIVE_MS = 300_000; // 5 minutes total inactivity before logout
 const WARNING_MS  = 30_000;  // show warning for last 30 seconds
 
 export default function App() {
@@ -112,18 +112,18 @@ export default function App() {
   }, []);
 
   const navItems: { id: ActiveSection; label: string; icon: React.ReactNode; color: string; badge?: number | null }[] = [
-    { id: 'home',      label: 'Home',       icon: <Home size={18}/>,       color: '#667eea' },
-    { id: 'idbuilder', label: 'ID Builder', icon: <CreditCard size={18}/>, color: '#ec4899' },
-    { id: 'idrecords', label: 'Saved IDs',  icon: <Download size={18}/>,   color: '#8b5cf6', badge: savedIDs.length || null },
-    { id: 'templates', label: 'Templates',  icon: <CreditCard size={18}/>, color: '#f59e0b' },
+    { id: 'home',      label: 'Home',       icon: <Home size={18}/>,        color: '#667eea' },
+    { id: 'idbuilder', label: 'ID Builder', icon: <Wand2 size={18}/>,       color: '#ec4899' },
+    { id: 'idrecords', label: 'Saved IDs',  icon: <Archive size={18}/>,     color: '#8b5cf6', badge: savedIDs.length || null },
+    { id: 'templates', label: 'Templates',  icon: <BookMarked size={18}/>,  color: '#f59e0b' },
   ];
 
   const allNavItems: { id: ActiveSection; label: string; icon: React.ReactNode; color: string; badge?: number | null }[] = [
     { id: 'home',      label: 'Home',          icon: <Home size={16}/>,            color: '#667eea' },
     { id: 'database',  label: 'Load Database', icon: <FileSpreadsheet size={16}/>, color: '#f59e0b', badge: employeeDatabase.length || null },
-    { id: 'idbuilder', label: 'ID Builder',    icon: <CreditCard size={16}/>,      color: '#ec4899' },
-    { id: 'idrecords', label: 'Saved IDs',     icon: <Download size={16}/>,        color: '#8b5cf6', badge: savedIDs.length || null },
-    { id: 'templates', label: 'ID Templates',  icon: <CreditCard size={16}/>,      color: '#f59e0b', badge: null },
+    { id: 'idbuilder', label: 'ID Builder',    icon: <Wand2 size={16}/>,           color: '#ec4899' },
+    { id: 'idrecords', label: 'Saved IDs',     icon: <Archive size={16}/>,         color: '#8b5cf6', badge: savedIDs.length || null },
+    { id: 'templates', label: 'ID Templates',  icon: <BookMarked size={16}/>,      color: '#f59e0b', badge: null },
     { id: 'accounts',  label: 'Accounts',      icon: <Shield size={16}/>,          color: '#64748b' },
   ];
 
@@ -306,8 +306,8 @@ export default function App() {
         <div style={{ flex: 1, overflowY: 'auto', padding: activeSection === 'idbuilder' ? '0' : isMobile ? '16px 12px 80px' : '24px' }}>
           {activeSection === 'home' && <HomePage savedIDs={savedIDs} employeeDatabase={employeeDatabase} onNavigate={setActiveSection} />}
           {activeSection === 'database' && <LoadDatabase employeeDatabase={employeeDatabase} setEmployeeDatabase={setEmployeeDatabase} />}
-          {activeSection === 'idbuilder' && <IDBuilder editingID={editingID} onEditSaved={_id => { setEditingID(null); }} pendingTemplate={pendingTemplate} onTemplatLoaded={() => setPendingTemplate(null)} />}
-          {activeSection === 'templates' && <TemplateManager />}
+          {activeSection === 'idbuilder' && <IDBuilder editingID={editingID} onEditSaved={_id => { setEditingID(null); }} pendingTemplate={pendingTemplate} onTemplatLoaded={() => setPendingTemplate(null)} onBack={() => setActiveSection('home')} />}
+          {activeSection === 'templates' && <TemplateManager onBack={() => setActiveSection('home')} />}
           {activeSection === 'accounts' && <AccountManager currentUser={authUser} />}
           {activeSection === 'idrecords' && <SavedIDs savedIDs={savedIDs} setSavedIDs={setSavedIDs} onEditInBuilder={entry => { setEditingID({ id: entry.id, employeeName: entry.employeeName, position: entry.position, front: entry.front, back: entry.back }); setActiveSection('idbuilder'); }} />}
         </div>
