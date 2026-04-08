@@ -56,12 +56,29 @@ export interface IDField {
   overlayOpacity?: number;
 }
 
+export interface CanvasImage {
+  id: string;
+  src: string;
+  label: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  opacity: number;
+  borderRadius: number;
+  rotation: number;
+  locked?: boolean;
+}
+
 export interface IDSide {
   background: string | null;
   bgColor?: string;
   bgGradient?: { type: 'linear' | 'radial'; color1: string; color2: string; angle?: number } | null;
+  bgMode?: 'predesigned' | 'canvas';
   shapes?: ShapeElement[];
+  canvasImages?: CanvasImage[];
   fields: IDField[];
+
   photoX: number; photoY: number; photoW: number; photoH: number; showPhoto: boolean;
   photoStrokeWidth?: number; photoStrokeColor?: string;
   photoShadowBlur?: number; photoShadowColor?: string;
@@ -73,6 +90,7 @@ export interface IDSide {
   sigShadowBlur?: number; sigShadowColor?: string;
   sigBrightness?: number; sigContrast?: number;
   sigColorize?: boolean; sigColorizeColor?: string; sigInkDark?: boolean;
+
   // QR Code
   showQR?: boolean;
   qrX?: number; qrY?: number; qrSize?: number;
