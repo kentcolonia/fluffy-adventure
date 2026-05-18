@@ -11,6 +11,7 @@ const defaultFrontFields: IDField[] = [
   { id: 'idnum',    label: 'ID Number',              value: 'ABISC-231003', x: 32, y: 92, fontSize: 10, color: '#ffffff', bold: false, italic: false, align: 'left', visible: true },
   { id: 'fullname', label: 'Full Name',               value: 'JESUS B. ILLUSTRISIMO', x: 13, y: 75, fontSize: 10, color: '#ffffff', bold: true, italic: false, align: 'left', visible: true },
   { id: 'position', label: 'Position / Designation',  value: 'ASSISTANT PORT ENGINEER', x: 32, y: 92, fontSize: 9, color: '#ffffff', bold: false, italic: false, align: 'left', visible: true },
+  { id: 'company',  label: 'Company',                 value: '', x: 50, y: 88, fontSize: 8, color: '#ffffff', bold: false, italic: false, align: 'center', visible: false },
 ];
 
 const defaultBackFields: IDField[] = [
@@ -548,6 +549,7 @@ export default function IDBuilder({ editingID, onEditSaved, pendingTemplate, onT
       }
       if(f.id==='position') return {...f, value: emp.position || ''};
       if(f.id==='idnum' && emp.empCode) return {...f, value: emp.empCode};
+      if(f.id==='company') return {...f, value: (emp as any).company || ''};
       return f;
     })}));
     // Fill back card fields from API data
@@ -1207,6 +1209,11 @@ export default function IDBuilder({ editingID, onEditSaved, pendingTemplate, onT
                   <div style={{minWidth:0}}>
                     <div style={{fontSize:'13px',fontWeight:700,color:'#0f172a',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{selectedEmployee.name}</div>
                     <div style={{fontSize:'11px',color:'#64748b'}}>{selectedEmployee.position}</div>
+                    {(selectedEmployee as any).company && (
+                      <div style={{marginTop:'4px'}}>
+                        <span style={{background:'#eff6ff',color:'#2563eb',borderRadius:'4px',padding:'2px 7px',fontSize:'10px',fontWeight:600}}>{(selectedEmployee as any).company}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
